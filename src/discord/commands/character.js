@@ -1,0 +1,108 @@
+import { SlashCommandBuilder } from 'discord.js';
+import { User } from '../../models/User.js';
+import { Character } from '../../models/Character.js';
+import { BASE_CLASSES } from '../../game/classes/classData.js';
+import { createCharacterProfileEmbed } from '../embeds/uiBuilders.js';
+
+export const data = new SlashCommandBuilder()
+  .setName('character')
+  .setDescription('Manage your Orbforge characters')
+  .addSubcommand(sub =>
+    sub.setName('create')
+      .setDescription('Create a new Orbforge character')
+      .addStringOption(opt =>
+        opt.setName('name')
+          .setDescription('Character Name')
+          .setRequired(true))
+      .addStringOption(opt =>
+        opt.setName('class')
+          .setDescription('Select base class')
+          .setRequired(true)
+          .addChoices(
+            { name: 'Warrior (Strength & Physical Juggernaut)', value: 'Warrior' },
+            { name: 'Ranger (Dexterity & Critical Precision)', value: 'Ranger' },
+            { name: 'Mage (Intelligence & Elemental Magic)', value: 'Mage' }
+          )))
+  .addSubcommand(sub =>
+    sub.setName('profile')
+      .setDescription('View your active character profile and stats'))
+  .addSubcommand(sub =>
+    sub.setName('list')
+      .setDescription('List all your characters'));
+
+export async function execute(interaction) {
+  const subcommand = interaction.options.getSubcommand();
+  const discordId = interaction.user.id;
+
+  let user = await User.findOne({ discordId });
+  if (!user) {
+    user = await User.create({ discordId });
+  }
+
+  if (subcommand === 'create') {
+    const name = interaction.options.getString('name');
+    const className = interaction.options.getString('class');
+
+    const characterCount = await Character.countDocuments({ userId: user._id });
+    const maxAllowedSlots = user.characterSlots.base + user.characterSlots.purchased;
+
+    if (characterCount >= maxAllowedSlots) {
+      return interaction.reply({ 
+        content: `❌ You have reached your maximum character slots (${characterCount}/${maxAllowedSlots}). Upgrade slots in \`/shop\`!`, 
+        ephemeral: true 
+      });
+    }
+
+    const classConfig = BASE_CLASSES[className];
+    const newCharacter = await Character.create({
+      userId: user._id,
+      discordId,
+      name,
+      className,
+      baseStats: classConfig.baseStats,
+      skillPoints: { available: 1, spent: 0 }
+    });
+
+    user.activeCharacterId = newCharacter._id;
+    await user.save();
+
+    const embed = createCharacterProfileEmbed(newCharacter, user.gems);
+    return interaction.reply({ 
+      content: `🎉 Successfully created character **${name}** standard class **${className}**!`, 
+      embeds: [embed] 
+    });
+  }
+
+  if (subcommand === 'profile') {
+    if (!user.activeCharacterId) {
+      return interaction.reply({ 
+        content: '❌ You do not have an active character. Create one using `/character create`!', 
+        ephemeral: true 
+      });
+    }
+
+    const character = await Character.findById(user.activeCharacterId);
+    if (!character) {
+      return interaction.reply({ content: '❌ Active character not found.', ephemeral: true });
+    }
+
+    const embed = createCharacterProfileEmbed(character, user.gems);
+    return interaction.reply({ embeds: [embed] });
+  }
+
+  if (subcommand === 'list') {
+    const characters = await Character.find({ userId: user._id });
+    if (characters.length === 0) {
+      return interaction.reply({ content: 'You have no characters yet. Create one with `/character create`!', ephemeral: true });
+    }
+
+    const listText = characters.map(c => {
+      const activeMarker = user.activeCharacterId && user.activeCharacterId.toString() === c._id.toString() ? ' ⭐ **[ACTIVE]**' : '';
+      return `• **${c.name}** — Level ${c.level} ${c.className}${c.subclassName ? ` (${c.subclassName})` : ''}${activeMarker}`;
+    }).join('\n');
+
+    return interaction.reply({
+      content: `📜 **Your Characters (${characters.length}/${user.characterSlots.base + user.characterSlots.purchased})**:\n${listText}`
+    });
+  }
+}
