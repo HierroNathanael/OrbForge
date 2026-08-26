@@ -4,12 +4,14 @@ import { SKILL_TREE_DATA } from '../../game/skillTree/treeData.js';
 import { getEligibleNodes, accumulateTreeStats } from '../../game/skillTree/treeEngine.js';
 
 export function createCharacterProfileEmbed(character, userGems = 0) {
-  const classInfo = BASE_CLASSES[character.className];
+  const classInfo = BASE_CLASSES[character.className] || { primaryStat: 'strength' };
   const subclassName = character.subclassName ? ` (${character.subclassName})` : ' (No Subclass)';
 
   const treeStats = accumulateTreeStats(character.className, character.passiveTree);
-  const orbList = Object.entries(character.orbs || {})
-    .filter(([_, qty]) => qty > 0)
+  const orbsObj = character.orbs?.toObject ? character.orbs.toObject() : (character.orbs || {});
+  
+  const orbList = Object.entries(orbsObj)
+    .filter(([k, qty]) => typeof qty === 'number' && qty > 0 && !k.startsWith('$') && k !== '_id')
     .map(([orbKey, qty]) => `• **${orbKey.replace(/_/g, ' ')}**: x${qty}`)
     .join('\n') || '• No Orbs';
 
@@ -84,7 +86,7 @@ export function createItemTooltip(item) {
   const suffixes = (item.suffixes || []).map(s => `🔸 *${s.name}*: +${s.value} ${s.stat.replace(/_/g, ' ')}`).join('\n') || '*None*';
 
   const baseStatsText = Object.entries(item.baseStats || {})
-    .filter(([_, v]) => v > 0)
+    .filter(([_, v]) => typeof v === 'number' && v > 0)
     .map(([k, v]) => `• **${k.toUpperCase()}**: +${v}`)
     .join('\n') || '• Base Item';
 
@@ -99,17 +101,18 @@ export function createItemTooltip(item) {
     .setTitle(`🗡️ ${item.name} [iLvl ${item.iLvl}]`)
     .setColor(rarityColors[item.rarity] || '#ffffff')
     .addFields(
-      { name: 'Rarity & Type', value: `**Rarity**: ${item.rarity}\n**Slot**: ${(item.type || 'item').toUpperCase()}`, inline: true },
+      { name: 'Rarity & Type', value: `**Rarity**: ${item.rarity}\n**Slot**: ${(item.type || 'item').toUpperCase()}${item.isEquipped ? ' 🛡️ **[EQUIPPED]**' : ''}`, inline: true },
       { name: 'Base Attributes', value: baseStatsText, inline: true },
       { name: 'Prefixes', value: prefixes, inline: false },
-      { name: 'Suffixes', value: suffixes, inline: false }
+      { name: 'Suffixes', value: suffixes, inline: false },
+      { name: 'Item ID (for crafting/equipping)', value: `\`${item._id}\``, inline: false }
     );
 }
 
 export function createCombatEmbed(encounterState) {
   const { mapTicket, round, partyState, enemyList, logs } = encounterState;
 
-  const playerStatus = partyState.map(m => `🛡️ **${m.character.name}**: ${m.currentHp}/${m.stats.maxHp} HP`).join('\n');
+  const playerStatus = partyState.map(m => `🛡️ **${m.character.name}**: ${Math.max(0, m.currentHp)}/${m.stats.maxHp} HP`).join('\n');
   const enemyStatus = enemyList.map(e => `${e.isBoss ? '👑' : '👾'} **${e.name}**: ${Math.max(0, e.hp)}/${e.maxHp} HP`).join('\n');
   const logText = logs.length > 0 ? logs.join('\n') : '*Battle has begun! Pick your actions for this round.*';
 
@@ -127,19 +130,19 @@ export function createCombatEmbed(encounterState) {
 export function createCombatActionButtons(characterId) {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`combat_attack_${characterId}`)
+      .setCustomId(`combat:attack:${characterId}`)
       .setLabel('Basic Attack ⚔️')
       .setStyle(ButtonStyle.Primary),
     new ButtonBuilder()
-      .setCustomId(`combat_skill_heavy_strike_${characterId}`)
+      .setCustomId(`combat:skill:heavy_strike:${characterId}`)
       .setLabel('Heavy Strike 💥')
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
-      .setCustomId(`combat_skill_fireball_${characterId}`)
+      .setCustomId(`combat:skill:fireball:${characterId}`)
       .setLabel('Fireball 🔥')
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
-      .setCustomId(`combat_defend_${characterId}`)
+      .setCustomId(`combat:defend:${characterId}`)
       .setLabel('Defend 🛡️')
       .setStyle(ButtonStyle.Secondary)
   );

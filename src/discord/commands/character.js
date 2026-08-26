@@ -28,7 +28,14 @@ export const data = new SlashCommandBuilder()
       .setDescription('View your active character profile and stats'))
   .addSubcommand(sub =>
     sub.setName('list')
-      .setDescription('List all your characters'));
+      .setDescription('List all your characters'))
+  .addSubcommand(sub =>
+    sub.setName('select')
+      .setDescription('Switch your active character')
+      .addStringOption(opt =>
+        opt.setName('name')
+          .setDescription('Name of character to make active')
+          .setRequired(true)));
 
 export async function execute(interaction) {
   const subcommand = interaction.options.getSubcommand();
@@ -83,7 +90,7 @@ export async function execute(interaction) {
 
     const character = await Character.findById(user.activeCharacterId);
     if (!character) {
-      return interaction.reply({ content: '❌ Active character not found.', ephemeral: true });
+      return interaction.reply({ content: '❌ Active character not found. Create one with `/character create`!', ephemeral: true });
     }
 
     const embed = createCharacterProfileEmbed(character, user.gems);
@@ -102,7 +109,29 @@ export async function execute(interaction) {
     }).join('\n');
 
     return interaction.reply({
-      content: `📜 **Your Characters (${characters.length}/${user.characterSlots.base + user.characterSlots.purchased})**:\n${listText}`
+      content: `📜 **Your Characters (${characters.length}/${user.characterSlots.base + user.characterSlots.purchased})**:\n${listText}\n\n*Use \`/character select name:<name>\` to switch active character!*`
+    });
+  }
+
+  if (subcommand === 'select') {
+    const targetName = interaction.options.getString('name');
+    const targetChar = await Character.findOne({ 
+      userId: user._id, 
+      name: { $regex: new RegExp(`^${targetName}$`, 'i') } 
+    });
+
+    if (!targetChar) {
+      return interaction.reply({ 
+        content: `❌ No character found with name "${targetName}". View your characters with \`/character list\`.`, 
+        ephemeral: true 
+      });
+    }
+
+    user.activeCharacterId = targetChar._id;
+    await user.save();
+
+    return interaction.reply({
+      content: `⭐ Switched active character to **${targetChar.name}** (Level ${targetChar.level} ${targetChar.className})!`
     });
   }
 }

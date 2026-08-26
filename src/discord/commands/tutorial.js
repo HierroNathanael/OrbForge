@@ -449,25 +449,25 @@ function buildNavRow(currentPage, userId) {
 
   row.addComponents(
     new ButtonBuilder()
-      .setCustomId(`tutorial_prev_${currentPage}_${userId}`)
+      .setCustomId(`tutorial:prev:${currentPage}:${userId}`)
       .setLabel('◀ Prev')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(currentPage === 0),
 
     new ButtonBuilder()
-      .setCustomId(`tutorial_page_0_${userId}`)
+      .setCustomId(`tutorial:page:0:${userId}`)
       .setLabel('🏠 Start')
       .setStyle(ButtonStyle.Primary)
       .setDisabled(currentPage === 0),
 
     new ButtonBuilder()
-      .setCustomId(`tutorial_page_${Math.min(currentPage + 2, TOTAL_PAGES - 1)}_${userId}`)
+      .setCustomId(`tutorial:page:${Math.min(currentPage + 2, TOTAL_PAGES - 1)}:${userId}`)
       .setLabel(`Chapter ${Math.min(currentPage + 2, TOTAL_PAGES)} ↩`)
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(currentPage === TOTAL_PAGES - 1),
 
     new ButtonBuilder()
-      .setCustomId(`tutorial_next_${currentPage}_${userId}`)
+      .setCustomId(`tutorial:next:${currentPage}:${userId}`)
       .setLabel('Next ▶')
       .setStyle(ButtonStyle.Success)
       .setDisabled(currentPage === TOTAL_PAGES - 1)
@@ -504,12 +504,23 @@ export async function execute(interaction) {
 export async function handleTutorialButton(interaction) {
   const { customId, user } = interaction;
 
-  if (!customId.startsWith('tutorial_')) return false;
+  if (!customId.startsWith('tutorial:') && !customId.startsWith('tutorial_')) return false;
 
-  const parts = customId.split('_');
-  // format: tutorial_<action>_<param>_<userId>
-  const action = parts[1];
-  const ownerId = parts[parts.length - 1];
+  let action = '';
+  let param = '0';
+  let ownerId = '';
+
+  if (customId.includes(':')) {
+    const parts = customId.split(':');
+    action = parts[1];
+    param = parts[2];
+    ownerId = parts[3];
+  } else {
+    const parts = customId.split('_');
+    action = parts[1];
+    param = parts[2];
+    ownerId = parts.slice(3).join('_');
+  }
 
   // Only the original user can navigate their own tutorial
   if (user.id !== ownerId) {
@@ -521,13 +532,13 @@ export async function handleTutorialButton(interaction) {
 
   let currentPage;
   if (action === 'next') {
-    currentPage = parseInt(parts[2], 10);
+    currentPage = parseInt(param, 10);
     currentPage = Math.min(currentPage + 1, TOTAL_PAGES - 1);
   } else if (action === 'prev') {
-    currentPage = parseInt(parts[2], 10);
+    currentPage = parseInt(param, 10);
     currentPage = Math.max(currentPage - 1, 0);
   } else if (action === 'page') {
-    currentPage = parseInt(parts[2], 10);
+    currentPage = parseInt(param, 10);
     currentPage = Math.max(0, Math.min(currentPage, TOTAL_PAGES - 1));
   } else {
     return false;

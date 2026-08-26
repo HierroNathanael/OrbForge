@@ -7,7 +7,7 @@ import { calculateEffectiveStats, resolveCombatRound, generatePersonalInstancedL
 import { createCombatEmbed, createCombatActionButtons } from '../embeds/uiBuilders.js';
 import { accumulateTreeStats } from '../../game/skillTree/treeEngine.js';
 
-const activeDungeonBattles = new Map();
+export const activeDungeonBattles = new Map();
 
 export const data = new SlashCommandBuilder()
   .setName('dungeon')
@@ -27,16 +27,19 @@ export async function execute(interaction) {
 
   const user = await User.findOne({ discordId });
   if (!user || !user.activeCharacterId) {
-    return interaction.reply({ content: '❌ Active character required. Use `/character create` first!', ephemeral: true });
+    return interaction.reply({ 
+      content: '❌ You need an active character first! Use `/character create` to make one.', 
+      ephemeral: true 
+    });
   }
 
   const character = await Character.findById(user.activeCharacterId);
   if (!character) {
-    return interaction.reply({ content: '❌ Active character not found.', ephemeral: true });
+    return interaction.reply({ content: '❌ Active character not found. Create one with `/character create`!', ephemeral: true });
   }
 
   const selectedTier = interaction.options.getInteger('tier');
-  // Default to Tier 0 (Tutorial) if early level, or Tier 1
+  // Default to Tier 0 (Tutorial) if character level <= 2, otherwise Tier 1
   const tier = selectedTier !== null ? selectedTier : (character.level <= 2 ? 0 : 1);
 
   const equippedItems = await Item.find({ characterId: character._id, isEquipped: true });
@@ -56,6 +59,13 @@ export async function execute(interaction) {
     }
   ];
 
+  // Remove any stale battles for this character
+  for (const [id, state] of activeDungeonBattles.entries()) {
+    if (state.partyState.some(m => m.character._id.toString() === character._id.toString())) {
+      activeDungeonBattles.delete(id);
+    }
+  }
+
   const battleId = `battle_${character._id}_${Date.now()}`;
   const encounterState = {
     battleId,
@@ -64,7 +74,7 @@ export async function execute(interaction) {
     partyState,
     enemyList,
     pendingActions: {},
-    logs: [`⚔️ **Encounter Started**: Entering ${mapTicket.name}! Monsters engaged.`]
+    logs: [`⚔️ **Encounter Started**: Entering ${mapTicket.name}! Choose your action below:`]
   };
 
   activeDungeonBattles.set(battleId, encounterState);
@@ -80,10 +90,33 @@ export async function execute(interaction) {
 
 export async function handleCombatButton(interaction) {
   const customId = interaction.customId;
-  if (!customId.startsWith('combat_')) return;
+  if (!customId.startsWith('combat:') && !customId.startsWith('combat_')) return;
 
-  const [_, actionType, ...rest] = customId.split('_');
-  const characterId = rest[rest.length - 1];
+  // Support both 'combat:action:characterId' and legacy 'combat_action_characterId'
+  let actionType = 'attack';
+  let skillId = null;
+  let characterId = '';
+
+  if (customId.includes(':')) {
+    const parts = customId.split(':');
+    // Format: combat:attack:charId or combat:skill:heavy_strike:charId or combat:defend:charId
+    if (parts[1] === 'skill') {
+      actionType = 'skill';
+      skillId = parts[2];
+      characterId = parts[3];
+    } else {
+      actionType = parts[1];
+      characterId = parts[2];
+    }
+  } else {
+    // Legacy format
+    const parts = customId.split('_');
+    actionType = parts[1];
+    characterId = parts[parts.length - 1];
+    if (actionType === 'skill') {
+      skillId = parts.slice(2, -1).join('_');
+    }
+  }
 
   // Find active battle containing this character
   let targetBattle = null;
@@ -95,13 +128,10 @@ export async function handleCombatButton(interaction) {
   }
 
   if (!targetBattle) {
-    return interaction.reply({ content: '❌ Dungeon battle session expired or not found.', ephemeral: true });
-  }
-
-  // Register action
-  let skillId = null;
-  if (actionType === 'skill') {
-    skillId = customId.split('_')[2];
+    return interaction.reply({ 
+      content: '⚠️ This dungeon battle session has finished or expired. Start a new run with `/dungeon enter`!', 
+      ephemeral: true 
+    });
   }
 
   targetBattle.pendingActions[characterId] = {
@@ -109,10 +139,9 @@ export async function handleCombatButton(interaction) {
     skillId
   };
 
-  // If all living party members submitted actions, resolve round!
   const livingPartyCount = targetBattle.partyState.filter(m => m.currentHp > 0).length;
   if (Object.keys(targetBattle.pendingActions).length >= livingPartyCount) {
-    // Resolve Option B round!
+    // Resolve simultaneous round!
     const roundResult = resolveCombatRound(targetBattle.partyState, targetBattle.enemyList, targetBattle.pendingActions);
     targetBattle.logs = roundResult.roundLogs;
     targetBattle.pendingActions = {}; // Reset for next round
@@ -146,10 +175,10 @@ export async function handleCombatButton(interaction) {
       activeDungeonBattles.delete(targetBattle.battleId);
 
       const orbText = loot.orbDrops.map(o => `• **${o.replace(/_/g, ' ')}**`).join('\n') || '*None*';
-      const gearText = loot.items.map(i => `• **${i.name}** [${i.rarity}]`).join('\n') || '*None*';
+      const gearText = loot.items.map(i => `• **${i.name}** [${i.rarity}] (ID: \`${i.baseItemId}\`)`).join('\n') || '*None*';
 
       return interaction.update({
-        content: `🏆 **VICTORY DEFEATED ALL MONSTERS!**\n\n💰 **Gold**: +${loot.gold}\n✨ **XP**: +${loot.xp}\n🔮 **Orbs Dropped**:\n${orbText}\n🗡️ **Gear Dropped**:\n${gearText}`,
+        content: `🏆 **VICTORY DEFEATED ALL MONSTERS!**\n\n💰 **Gold**: +${loot.gold}\n✨ **XP**: +${loot.xp}\n🔮 **Orbs Dropped**:\n${orbText}\n🗡️ **Gear Dropped**:\n${gearText}\n\n*Use \`/inventory\` to view gear and \`/tree allocate\` to spend skill points!*`,
         embeds: [],
         components: []
       });
@@ -158,7 +187,7 @@ export async function handleCombatButton(interaction) {
     if (roundResult.allPlayersDefeated) {
       activeDungeonBattles.delete(targetBattle.battleId);
       return interaction.update({
-        content: `💀 **DEFEAT!** All party members fell in combat inside ${targetBattle.mapTicket.name}.`,
+        content: `💀 **DEFEAT!** All party members fell in combat inside **${targetBattle.mapTicket.name}**.\n*Tip: Try Tier 0 (Novice Training Grounds) to level up first with \`/dungeon enter tier:0\`!*`,
         embeds: [],
         components: []
       });
