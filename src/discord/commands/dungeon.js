@@ -80,7 +80,7 @@ export async function execute(interaction) {
   activeDungeonBattles.set(battleId, encounterState);
 
   const embed = createCombatEmbed(encounterState);
-  const actionRow = createCombatActionButtons(character._id.toString());
+  const actionRow = createCombatActionButtons(character);
 
   return interaction.reply({
     embeds: [embed],
@@ -195,7 +195,7 @@ export async function handleCombatButton(interaction) {
 
     // Battle continues
     const embed = createCombatEmbed(targetBattle);
-    const actionRow = createCombatActionButtons(characterId);
+    const actionRow = createCombatActionButtons(targetBattle.partyState[0].character);
 
     return interaction.update({
       embeds: [embed],

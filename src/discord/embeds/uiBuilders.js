@@ -127,23 +127,35 @@ export function createCombatEmbed(encounterState) {
     .setFooter({ text: 'Option B Simultaneous Round Resolution • Turn-based ARPG' });
 }
 
-export function createCombatActionButtons(characterId) {
-  return new ActionRowBuilder().addComponents(
+import { getCharacterCombatSkills } from '../../game/skills/skillRegistry.js';
+
+export function createCombatActionButtons(character) {
+  const characterId = character._id ? character._id.toString() : character.toString();
+  const skills = typeof character === 'object' && character.className ? getCharacterCombatSkills(character) : [];
+
+  const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`combat:attack:${characterId}`)
       .setLabel('Basic Attack ⚔️')
-      .setStyle(ButtonStyle.Primary),
-    new ButtonBuilder()
-      .setCustomId(`combat:skill:heavy_strike:${characterId}`)
-      .setLabel('Heavy Strike 💥')
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId(`combat:skill:fireball:${characterId}`)
-      .setLabel('Fireball 🔥')
-      .setStyle(ButtonStyle.Danger),
+      .setStyle(ButtonStyle.Primary)
+  );
+
+  for (const skill of skills.slice(0, 2)) {
+    const style = (skill.role === 'tank' || skill.role === 'support') ? ButtonStyle.Success : ButtonStyle.Danger;
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`combat:skill:${skill.id}:${characterId}`)
+        .setLabel(`${skill.name} ${skill.emoji || '✨'}`)
+        .setStyle(style)
+    );
+  }
+
+  row.addComponents(
     new ButtonBuilder()
       .setCustomId(`combat:defend:${characterId}`)
       .setLabel('Defend 🛡️')
       .setStyle(ButtonStyle.Secondary)
   );
+
+  return row;
 }
