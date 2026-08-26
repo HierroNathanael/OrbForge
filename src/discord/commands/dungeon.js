@@ -17,12 +17,13 @@ export const data = new SlashCommandBuilder()
       .setDescription('Start a dungeon map run')
       .addIntegerOption(opt =>
         opt.setName('tier')
-          .setDescription('Map Tier (1 to 6)')
+          .setDescription('Map Tier (0 = Tutorial Grounds, 1-6 = Dungeons)')
+          .setMinValue(0)
+          .setMaxValue(6)
           .setRequired(false)));
 
 export async function execute(interaction) {
   const discordId = interaction.user.id;
-  const tier = interaction.options.getInteger('tier') || 1;
 
   const user = await User.findOne({ discordId });
   if (!user || !user.activeCharacterId) {
@@ -33,6 +34,10 @@ export async function execute(interaction) {
   if (!character) {
     return interaction.reply({ content: '❌ Active character not found.', ephemeral: true });
   }
+
+  const selectedTier = interaction.options.getInteger('tier');
+  // Default to Tier 0 (Tutorial) if early level, or Tier 1
+  const tier = selectedTier !== null ? selectedTier : (character.level <= 2 ? 0 : 1);
 
   const equippedItems = await Item.find({ characterId: character._id, isEquipped: true });
   const treeStats = accumulateTreeStats(character.className, character.passiveTree);

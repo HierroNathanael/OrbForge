@@ -170,21 +170,22 @@ const TUTORIAL_PAGES = [
       '',
       '**⚔️ Starting a Dungeon:**',
       '```',
-      '/dungeon enter tier:<1-6>',
+      '/dungeon enter tier:<0-6>',
       '```',
-      'Higher tiers = tougher enemies, better rewards, and more Orb drops.',
+      'Start with **Tier 0** (Novice Training Grounds) to gain your first levels, Orbs, and starter gear!',
     ].join('\n'),
     fields: [
       {
         name: '🗺️ Map Tiers',
         value: [
           '```',
-          'Tier 1 — Verdant Forest        (Level 10  Boss: Gargantuan Treant)',
-          'Tier 2 — Ruined Catacombs      (Level 20  Boss: Lich King Aegis)',
-          'Tier 3 — Blazing Caldera       (Level 35  Boss: Magma Behemoth)',
-          'Tier 4 — Frostbite Peak        (Level 50  Boss: Glacial Wyrm)',
-          'Tier 5 — Abyssal Temple        (Level 70  Boss: Void Emperor)',
-          'Tier 6 — Celestial Spire       (Level 90  Boss: Star-Eater Titan)',
+          'Tier 0 — Novice Training Grounds (Level 1   Boss: Training Golem)',
+          'Tier 1 — Verdant Forest         (Level 5   Boss: Gargantuan Treant)',
+          'Tier 2 — Ruined Catacombs       (Level 15  Boss: Lich King Aegis)',
+          'Tier 3 — Blazing Caldera        (Level 30  Boss: Magma Behemoth)',
+          'Tier 4 — Frostbite Peak         (Level 50  Boss: Glacial Wyrm)',
+          'Tier 5 — Abyssal Temple         (Level 70  Boss: Void Emperor)',
+          'Tier 6 — Celestial Spire        (Level 90  Boss: Star-Eater Titan)',
           '```'
         ].join('\n'),
         inline: false
@@ -372,7 +373,7 @@ const TUTORIAL_PAGES = [
       {
         name: '⚔️ Dungeon Commands',
         value: [
-          '`/dungeon enter tier:<1-6>` — Enter a Map dungeon run',
+          '`/dungeon enter tier:<0-6>` — Enter a Map dungeon run (0 = Tutorial)',
           'Combat buttons: **Attack ⚔️** | **Heavy Strike 💥** | **Fireball 🔥** | **Defend 🛡️**'
         ].join('\n'),
         inline: false
@@ -417,7 +418,7 @@ const TUTORIAL_PAGES = [
       },
       {
         name: '🎉 You\'re Ready!',
-        value: 'Start your journey:\n```\n/character create name:MyExile class:Warrior\n/dungeon enter tier:1\n```\nGood luck in Orbforge, Exile. May the Orbs be ever in your favour. ⚔️',
+        value: 'Start your journey:\n```\n/character create name:MyExile class:Warrior\n/dungeon enter tier:0\n```\nGood luck in Orbforge, Exile. May the Orbs be ever in your favour. ⚔️',
         inline: false
       }
     ]
