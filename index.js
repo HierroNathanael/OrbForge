@@ -1,3 +1,6 @@
+import { Client, GatewayIntentBits, Collection, Events } from 'discord.js';
+import dotenv from 'dotenv';
+import { connectDatabase } from './src/config/database.js';
 import * as characterCmd from './src/discord/commands/character.js';
 import * as treeCmd from './src/discord/commands/tree.js';
 import * as craftCmd from './src/discord/commands/craft.js';
@@ -24,7 +27,7 @@ for (const cmd of commands) {
 client.once(Events.ClientReady, c => {
   console.log(`\n========================================`);
   console.log(`[Orbforge] ⚔️ Bot online as ${c.user.tag}`);
-  console.log(`[Orbforge] 📖 /tutorial is ready to use!`);
+  console.log(`[Orbforge] 📖 /tutorial & /dungeon are ready to use!`);
   console.log(`========================================\n`);
 });
 
@@ -52,9 +55,9 @@ client.on(Events.InteractionCreate, async interaction => {
       await treeCmd.handleTreeSelectMenu(interaction);
     }
   } else if (interaction.isButton()) {
-    if (interaction.customId.startsWith('combat_')) {
+    if (interaction.customId.startsWith('combat:') || interaction.customId.startsWith('combat_')) {
       await dungeonCmd.handleCombatButton(interaction);
-    } else if (interaction.customId.startsWith('tutorial_')) {
+    } else if (interaction.customId.startsWith('tutorial:') || interaction.customId.startsWith('tutorial_')) {
       await tutorialCmd.handleTutorialButton(interaction);
     }
   }
