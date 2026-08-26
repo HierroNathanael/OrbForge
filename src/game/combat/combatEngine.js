@@ -1,4 +1,5 @@
 import { SKILL_REGISTRY } from '../skills/skillRegistry.js';
+import { GAME_CONFIG } from '../../config/constants.js';
 
 export function calculateEffectiveStats(character, equippedItems = [], treeStats = {}) {
   const baseClassGrowth = {
@@ -113,7 +114,8 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
     if (action.type === 'skill' && action.skillId) {
       const skill = SKILL_REGISTRY[action.skillId];
       if (skill && skill.role === 'dps') {
-        rawDamage = Math.round(rawDamage * (skill.ranks[0].damageMultiplier || 1.5));
+        const mult = skill.ranks && skill.ranks[0] ? skill.ranks[0].damageMultiplier : 1.5;
+        rawDamage = Math.round(rawDamage * mult);
         if (skill.target === 'all_enemies') isAoE = true;
       }
     }
@@ -192,36 +194,40 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
   };
 }
 
-export function generatePersonalInstancedLoot(character, mapTier = 1) {
-  const gold = Math.round(50 + (mapTier * 45) + Math.random() * 30);
-  const xp = Math.round(100 + (mapTier * 80));
+export function generatePersonalInstancedLoot(character, mapTier = 1, boostMultipliers = { exp: 1.0, drop: 1.0 }) {
+  const expMult = boostMultipliers.exp || 1.0;
+  const dropMult = boostMultipliers.drop || 1.0;
+
+  // Full normal base rewards (100% normal, no penalty)
+  const gold = Math.round((50 + (mapTier * 45) + Math.random() * 30) * dropMult);
+  const xp = Math.round((100 + (mapTier * 80)) * expMult);
 
   const items = [];
   const orbDrops = [];
 
-  // Drop chance for PoE currency Orbs
+  // Drop chance for new lore-named PoE currency Orbs
   const orbRoll = Math.random();
-  if (orbRoll < 0.40) {
-    orbDrops.push('orb_of_augmentation');
+  if (orbRoll < 0.40 * dropMult) {
+    orbDrops.push(GAME_CONFIG.ORB_TYPES.TEMPERING);
   }
-  if (orbRoll < 0.25) {
-    orbDrops.push('orb_of_transmutation');
+  if (orbRoll < 0.25 * dropMult) {
+    orbDrops.push(GAME_CONFIG.ORB_TYPES.KINDLING);
   }
-  if (orbRoll < 0.10) {
-    orbDrops.push('orb_of_scouring');
+  if (orbRoll < 0.10 * dropMult) {
+    orbDrops.push(GAME_CONFIG.ORB_TYPES.CLEANSING);
   }
-  if (orbRoll < 0.08) {
-    orbDrops.push('orb_of_alchemy');
+  if (orbRoll < 0.08 * dropMult) {
+    orbDrops.push(GAME_CONFIG.ORB_TYPES.ASCENDANCE);
   }
-  if (orbRoll < 0.03) {
-    orbDrops.push('orb_of_chaos');
+  if (orbRoll < 0.03 * dropMult) {
+    orbDrops.push(GAME_CONFIG.ORB_TYPES.UNMAKING);
   }
-  if (orbRoll < 0.005) {
-    orbDrops.push('orb_of_exaltation');
+  if (orbRoll < 0.005 * dropMult) {
+    orbDrops.push(GAME_CONFIG.ORB_TYPES.ZENITH);
   }
 
-  // Drop chance for gear
-  if (Math.random() < 0.50) {
+  // Drop chance for gear (100% full normal chance)
+  if (Math.random() < 0.50 * dropMult) {
     const types = ['weapon', 'helm', 'chest', 'boots', 'ring', 'amulet'];
     const type = types[Math.floor(Math.random() * types.length)];
     const iLvl = Math.min(100, Math.max(1, mapTier * 10));

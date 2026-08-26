@@ -139,6 +139,31 @@ test('Discord Commands Flow — /dungeon enter and combat buttons to victory', a
   assert.equal(dungeonCmd.activeDungeonBattles.has(battle.battleId), false, 'Battle should finish and clear from active state');
 });
 
+test('Discord Commands Flow — /dungeon auto with 100% full normal rewards', async () => {
+  const userId = 'user_123';
+  const user = await mongoose.model('User').findOne({ discordId: userId });
+
+  // 1. Without active pass -> should prompt to buy pass
+  const autoFailInt = createMockInteraction(userId, { subcommand: 'auto', tier: 0, runs: 1 });
+  await dungeonCmd.execute(autoFailInt);
+  assert.ok(autoFailInt.getReply().content.includes('Auto-Battle Pass Required'));
+
+  // 2. Activate Auto-Battle Pass on user
+  user.autoBattlePass = {
+    active: true,
+    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000)
+  };
+  await user.save();
+
+  // 3. Run /dungeon auto with active pass
+  const autoSuccessInt = createMockInteraction(userId, { subcommand: 'auto', tier: 0, runs: 2 });
+  await dungeonCmd.execute(autoSuccessInt);
+  const reply = autoSuccessInt.getReply();
+  assert.equal(reply.embeds.length, 1);
+  assert.ok(reply.embeds[0].data.title.includes('Auto-Battle Results'));
+  assert.ok(reply.embeds[0].data.description.includes('100% full normal rewards'));
+});
+
 test('Discord Commands Flow — /inventory view, equip, and /craft with dropped Orbs', async () => {
   const userId = 'user_123';
 
@@ -158,6 +183,9 @@ test('Discord Commands Flow — /inventory view, equip, and /craft with dropped 
   assert.ok(equipInt.getReply().content.includes('Equipped'));
 
   // 3. /craft with Orb of Kindling
+  item.rarity = 'Normal';
+  await item.save();
+
   const craftInt = createMockInteraction(userId, { 
     orb: GAME_CONFIG.ORB_TYPES.KINDLING, 
     item_id: item._id.toString() 

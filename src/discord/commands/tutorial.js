@@ -340,7 +340,7 @@ const TUTORIAL_PAGES = [
       },
       {
         name: '🤖 Auto-Battle Pass',
-        value: 'While active, your character can run dungeons automatically in the background — earning passive XP, Gold, and Orbs without manual interaction.',
+        value: 'While active, your character can run dungeons automatically via `/dungeon auto` — earning **100% full normal XP, Gold, Orbs, and Gear drops with zero penalty or reduction**!',
         inline: false
       }
     ]

@@ -37,7 +37,7 @@ export async function execute(interaction) {
       .addFields(
         { name: '🚀 EXP Boosts', value: '• **1-Day 2x EXP Boost**: 💎 100 Gems\n*(FIFO Queue sorted by highest multiplier)*', inline: false },
         { name: '🎁 Drop Boosts', value: '• **1-Day 2x Drop Quantity Boost**: 💎 150 Gems\n*(Increases item & Orb drop quantities)*', inline: false },
-        { name: '⚡ Auto-Battle Pass', value: '• **1-Day Auto-Battle Pass**: 💎 200 Gems\n*(Unlocks hands-off background dungeon loop while active)*', inline: false },
+        { name: '⚡ Auto-Battle Pass', value: '• **1-Day Auto-Battle Pass**: 💎 200 Gems\n*(Auto-battle dungeon runs with 100% full normal rewards & drops)*', inline: false },
         { name: '📦 Account Upgrades', value: '• **+1 Extra Character Slot**: 💎 300 Gems (Max 10)', inline: false }
       )
       .setFooter({ text: 'Use /shop buy item:<choice> to purchase.' });
