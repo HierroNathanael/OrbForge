@@ -24,7 +24,10 @@ for (const cmd of commands) {
 }
 
 client.once(Events.ClientReady, c => {
-  console.log(`[Orbforge] ⚔️ Bot logged in as ${c.user.tag}`);
+  console.log(`\n========================================`);
+  console.log(`[Orbforge] ⚔️ Bot online as ${c.user.tag}`);
+  console.log(`[Orbforge] 📖 /tutorial is ready to use!`);
+  console.log(`========================================\n`);
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -36,7 +39,10 @@ client.on(Events.InteractionCreate, async interaction => {
       await command.execute(interaction);
     } catch (error) {
       console.error(`[Error] Command ${interaction.commandName} execution error:`, error);
-      const replyOptions = { content: '❌ An error occurred while executing this command!', ephemeral: true };
+      const replyOptions = { 
+        content: `❌ Command error: ${error.message.includes('buffering timed out') || error.message.includes('whitelist') ? 'Database connection not ready. Please ensure your IP is whitelisted in MongoDB Atlas!' : 'An error occurred while executing this command!'}`, 
+        ephemeral: true 
+      };
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp(replyOptions);
       } else {
@@ -57,16 +63,21 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 async function main() {
+  if (!process.env.DISCORD_TOKEN) {
+    console.error('[Orbforge] ❌ Error: DISCORD_TOKEN is missing in .env!');
+    process.exit(1);
+  }
+
+  // Attempt database connection in the background so bot can log in immediately
+  connectDatabase().catch(err => {
+    console.warn('[Orbforge] ⚠️ Database connection failed on startup. Commands requiring DB will wait or prompt.');
+  });
+
   try {
-    await connectDatabase();
-    
-    if (process.env.DISCORD_TOKEN) {
-      await client.login(process.env.DISCORD_TOKEN);
-    } else {
-      console.warn('[Orbforge] Warning: DISCORD_TOKEN is missing in environment variables. Bot client not connected to live Discord network.');
-    }
+    console.log('[Orbforge] Logging into Discord...');
+    await client.login(process.env.DISCORD_TOKEN);
   } catch (err) {
-    console.error('[Orbforge] Startup failure:', err);
+    console.error('[Orbforge] ❌ Discord login failure:', err);
   }
 }
 
