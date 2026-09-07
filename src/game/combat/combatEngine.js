@@ -133,7 +133,9 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
     if (member.currentHp <= 0) continue;
     const action = effectiveActions[member.character._id.toString()];
 
-    const targetEnemy = enemyList.find(e => e.hp > 0);
+    // Player-chosen target if still alive, otherwise fall back to first living enemy.
+    const targetEnemy = (action.targetId && enemyList.find(e => e.id === action.targetId && e.hp > 0))
+      || enemyList.find(e => e.hp > 0);
     if (!targetEnemy) break; // All enemies defeated
 
     let rawDamage = member.stats.damage;

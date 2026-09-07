@@ -133,21 +133,38 @@ export function createCombatEmbed(encounterState) {
 
 import { getCharacterCombatSkills } from '../../game/skills/skillRegistry.js';
 
-export function createCombatActionButtons(character, currentMana = Infinity) {
+export function createCombatActionButtons(character, currentMana = Infinity, enemyList = []) {
   const characterId = character._id ? character._id.toString() : character.toString();
   const skills = typeof character === 'object' && character.className ? getCharacterCombatSkills(character) : [];
+  const rows = [];
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`combat:attack:${characterId}`)
-      .setLabel('Basic Attack ⚔️')
-      .setStyle(ButtonStyle.Primary)
-  );
+  const livingEnemies = enemyList.filter(e => e.hp > 0).slice(0, 5);
+  const attackRow = new ActionRowBuilder();
+  if (livingEnemies.length > 0) {
+    for (const enemy of livingEnemies) {
+      attackRow.addComponents(
+        new ButtonBuilder()
+          .setCustomId(`combat:attack:${enemy.id}:${characterId}`)
+          .setLabel(`${enemy.isBoss ? '👑' : '⚔️'} ${enemy.name} (${enemy.hp}/${enemy.maxHp})`.slice(0, 80))
+          .setStyle(enemy.isBoss ? ButtonStyle.Danger : ButtonStyle.Primary)
+      );
+    }
+  } else {
+    // No enemy list supplied (or all dead) — fall back to an untargeted attack.
+    attackRow.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`combat:attack:${characterId}`)
+        .setLabel('Basic Attack ⚔️')
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
+  rows.push(attackRow);
 
+  const actionRow = new ActionRowBuilder();
   for (const skill of skills.slice(0, 2)) {
     const style = (skill.role === 'tank' || skill.role === 'support') ? ButtonStyle.Success : ButtonStyle.Danger;
     const cost = skill.ranks && skill.ranks[0] ? (skill.ranks[0].cost || 0) : 0;
-    row.addComponents(
+    actionRow.addComponents(
       new ButtonBuilder()
         .setCustomId(`combat:skill:${skill.id}:${characterId}`)
         .setLabel(`${skill.name} ${skill.emoji || '✨'}${cost > 0 ? ` (${cost} MP)` : ''}`)
@@ -156,12 +173,13 @@ export function createCombatActionButtons(character, currentMana = Infinity) {
     );
   }
 
-  row.addComponents(
+  actionRow.addComponents(
     new ButtonBuilder()
       .setCustomId(`combat:defend:${characterId}`)
       .setLabel('Defend 🛡️')
       .setStyle(ButtonStyle.Secondary)
   );
+  rows.push(actionRow);
 
-  return row;
+  return rows;
 }

@@ -83,11 +83,11 @@ export async function execute(interaction) {
   activeDungeonBattles.set(battleId, encounterState);
 
   const embed = createCombatEmbed(encounterState);
-  const actionRow = createCombatActionButtons(character, partyState[0].currentMana);
+  const actionRows = createCombatActionButtons(character, partyState[0].currentMana, enemyList);
 
   return interaction.reply({
     embeds: [embed],
-    components: [actionRow]
+    components: actionRows
   });
 }
 
@@ -98,14 +98,19 @@ export async function handleCombatButton(interaction) {
   // Support both 'combat:action:characterId' and legacy 'combat_action_characterId'
   let actionType = 'attack';
   let skillId = null;
+  let targetId = null;
   let characterId = '';
 
   if (customId.includes(':')) {
     const parts = customId.split(':');
-    // Format: combat:attack:charId or combat:skill:heavy_strike:charId or combat:defend:charId
+    // Formats: combat:attack:targetId:charId | combat:skill:skillId:charId | combat:defend:charId
     if (parts[1] === 'skill') {
       actionType = 'skill';
       skillId = parts[2];
+      characterId = parts[3];
+    } else if (parts[1] === 'attack' && parts.length === 4) {
+      actionType = 'attack';
+      targetId = parts[2];
       characterId = parts[3];
     } else {
       actionType = parts[1];
@@ -139,7 +144,8 @@ export async function handleCombatButton(interaction) {
 
   targetBattle.pendingActions[characterId] = {
     type: actionType === 'skill' ? 'skill' : actionType,
-    skillId
+    skillId,
+    targetId
   };
 
   const livingPartyCount = targetBattle.partyState.filter(m => m.currentHp > 0).length;
@@ -198,11 +204,11 @@ export async function handleCombatButton(interaction) {
 
     // Battle continues
     const embed = createCombatEmbed(targetBattle);
-    const actionRow = createCombatActionButtons(targetBattle.partyState[0].character, targetBattle.partyState[0].currentMana);
+    const actionRows = createCombatActionButtons(targetBattle.partyState[0].character, targetBattle.partyState[0].currentMana, targetBattle.enemyList);
 
     return interaction.update({
       embeds: [embed],
-      components: [actionRow]
+      components: actionRows
     });
   } else {
     return interaction.reply({ content: `✅ Action registered for this round. Waiting for party members...`, ephemeral: true });
