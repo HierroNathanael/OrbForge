@@ -17,10 +17,6 @@ const userSchema = new mongoose.Schema({
   boosts: {
     exp: [boostItemSchema],
     drop: [boostItemSchema]
-  },
-  autoBattlePass: {
-    active: { type: Boolean, default: false },
-    expiresAt: { type: Date, default: null }
   }
 }, { timestamps: true });
 

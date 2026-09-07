@@ -18,7 +18,6 @@ export const data = new SlashCommandBuilder()
           .addChoices(
             { name: '1-Day 2x EXP Boost (100 Gems)', value: 'exp_boost_1d' },
             { name: '1-Day 2x Drop Boost (150 Gems)', value: 'drop_boost_1d' },
-            { name: '1-Day Auto-Battle Pass (200 Gems)', value: 'auto_pass_1d' },
             { name: '+1 Character Slot (300 Gems)', value: 'slot_expansion' }
           )));
 
@@ -37,7 +36,6 @@ export async function execute(interaction) {
       .addFields(
         { name: '🚀 EXP Boosts', value: '• **1-Day 2x EXP Boost**: 💎 100 Gems\n*(FIFO Queue sorted by highest multiplier)*', inline: false },
         { name: '🎁 Drop Boosts', value: '• **1-Day 2x Drop Quantity Boost**: 💎 150 Gems\n*(Increases item & Orb drop quantities)*', inline: false },
-        { name: '⚡ Auto-Battle Pass', value: '• **1-Day Auto-Battle Pass**: 💎 200 Gems\n*(Auto-battle dungeon runs with 100% full normal rewards & drops)*', inline: false },
         { name: '📦 Account Upgrades', value: '• **+1 Extra Character Slot**: 💎 300 Gems (Max 10)', inline: false }
       )
       .setFooter({ text: 'Use /shop buy item:<choice> to purchase.' });
@@ -62,21 +60,6 @@ export async function execute(interaction) {
       user.boosts.drop = addBoost(user.boosts.drop || [], 2.0, 1);
       await user.save();
       return interaction.reply({ content: '✅ Purchased **1-Day 2x Drop Quantity Boost**!' });
-    }
-
-    if (choice === 'auto_pass_1d') {
-      if (user.gems < 200) return interaction.reply({ content: '❌ Not enough Gems! Requires 💎 200 Gems.', ephemeral: true });
-      user.gems -= 200;
-      const currentExpiry = (user.autoBattlePass && user.autoBattlePass.expiresAt && user.autoBattlePass.expiresAt > new Date())
-        ? user.autoBattlePass.expiresAt.getTime()
-        : Date.now();
-      
-      user.autoBattlePass = {
-        active: true,
-        expiresAt: new Date(currentExpiry + 24 * 60 * 60 * 1000)
-      };
-      await user.save();
-      return interaction.reply({ content: '⚡ Purchased **1-Day Auto-Battle Pass**! Background dungeon loop activated.' });
     }
 
     if (choice === 'slot_expansion') {
