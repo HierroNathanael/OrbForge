@@ -103,8 +103,14 @@ export async function handleCombatButton(interaction) {
 
   if (customId.includes(':')) {
     const parts = customId.split(':');
-    // Formats: combat:attack:targetId:charId | combat:skill:skillId:charId | combat:defend:charId
-    if (parts[1] === 'skill') {
+    // Formats: combat:attack:targetId:charId | combat:skill:skillId:targetId:charId
+    //        | combat:skill:skillId:charId (untargeted skill) | combat:defend:charId
+    if (parts[1] === 'skill' && parts.length === 5) {
+      actionType = 'skill';
+      skillId = parts[2];
+      targetId = parts[3];
+      characterId = parts[4];
+    } else if (parts[1] === 'skill') {
       actionType = 'skill';
       skillId = parts[2];
       characterId = parts[3];

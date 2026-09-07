@@ -164,12 +164,32 @@ export function createCombatActionButtons(character, currentMana = Infinity, ene
   for (const skill of skills.slice(0, 2)) {
     const style = (skill.role === 'tank' || skill.role === 'support') ? ButtonStyle.Success : ButtonStyle.Danger;
     const cost = skill.ranks && skill.ranks[0] ? (skill.ranks[0].cost || 0) : 0;
+    const disabled = currentMana < cost;
+
+    // Single-target damage skills get one button per living enemy, same as Attack.
+    // AoE/self/party skills (e.g. Shield Taunt, Fireball, Divine Heal) hit everyone
+    // already, so a target picker would be meaningless — keep those as one button.
+    if (skill.target === 'single_enemy' && livingEnemies.length > 0) {
+      const skillRow = new ActionRowBuilder();
+      for (const enemy of livingEnemies) {
+        skillRow.addComponents(
+          new ButtonBuilder()
+            .setCustomId(`combat:skill:${skill.id}:${enemy.id}:${characterId}`)
+            .setLabel(`${skill.emoji || '✨'} ${skill.name} — ${enemy.name}${cost > 0 ? ` (${cost} MP)` : ''}`.slice(0, 80))
+            .setStyle(style)
+            .setDisabled(disabled)
+        );
+      }
+      rows.push(skillRow);
+      continue;
+    }
+
     actionRow.addComponents(
       new ButtonBuilder()
         .setCustomId(`combat:skill:${skill.id}:${characterId}`)
         .setLabel(`${skill.name} ${skill.emoji || '✨'}${cost > 0 ? ` (${cost} MP)` : ''}`)
         .setStyle(style)
-        .setDisabled(currentMana < cost)
+        .setDisabled(disabled)
     );
   }
 
