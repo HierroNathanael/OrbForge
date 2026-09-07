@@ -71,9 +71,9 @@ export async function execute(interaction) {
       .setColor('#3498db')
       .addFields(
         { name: '⚔️ Currently Equipped Gear', value: equippedText, inline: false },
-        { name: '📦 Bag Items (Use ID to /craft or /inventory equip)', value: unequippedText, inline: false }
+        { name: '📦 Bag Items (Use ID to /forge or /inventory equip)', value: unequippedText, inline: false }
       )
-      .setFooter({ text: 'Use /inventory equip item_id:<ID> or /craft orb:<type> item_id:<ID>' });
+      .setFooter({ text: 'Use /inventory equip item_id:<ID> or /forge orb:<type> item_id:<ID>' });
 
     return interaction.reply({ embeds: [embed] });
   }

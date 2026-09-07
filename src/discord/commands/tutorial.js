@@ -178,7 +178,7 @@ const TUTORIAL_PAGES = [
     description: [
       'Non-destructive crafting — Orbs modify affixes, never destroy items.',
       '```',
-      '/craft orb:<OrbType> item_id:<ItemID>',
+      '/forge orb:<OrbType> item_id:<ItemID>',
       '```',
       'Item IDs from `/inventory`. Orbs drop in dungeons.',
     ].join('\n'),
@@ -238,7 +238,7 @@ const TUTORIAL_PAGES = [
       },
       {
         name: '🔮 Crafting',
-        value: '`/craft orb:<type> item_id:<id>` · `/inventory`',
+        value: '`/forge orb:<type> item_id:<id>` · `/inventory`',
         inline: false
       },
       {

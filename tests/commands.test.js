@@ -7,7 +7,7 @@ import * as characterCmd from '../src/discord/commands/character.js';
 import * as treeCmd from '../src/discord/commands/tree.js';
 import * as dungeonCmd from '../src/discord/commands/dungeon.js';
 import * as inventoryCmd from '../src/discord/commands/inventory.js';
-import * as craftCmd from '../src/discord/commands/craft.js';
+import * as forgeCmd from '../src/discord/commands/forge.js';
 import * as tutorialCmd from '../src/discord/commands/tutorial.js';
 import { GAME_CONFIG } from '../src/config/constants.js';
 
@@ -138,7 +138,7 @@ test('Discord Commands Flow — /dungeon enter and combat buttons to victory', a
   assert.equal(dungeonCmd.activeDungeonBattles.has(battle.battleId), false, 'Battle should finish and clear from active state');
 });
 
-test('Discord Commands Flow — /inventory view, equip, and /craft with dropped Orbs', async () => {
+test('Discord Commands Flow — /inventory view, equip, and /forge with dropped Orbs', async () => {
   const userId = 'user_123';
 
   // 1. /inventory view
@@ -156,17 +156,17 @@ test('Discord Commands Flow — /inventory view, equip, and /craft with dropped 
   await inventoryCmd.execute(equipInt);
   assert.ok(equipInt.getReply().content.includes('Equipped'));
 
-  // 3. /craft with Orb of Kindling
+  // 3. /forge with Orb of Kindling
   item.rarity = 'Normal';
   await item.save();
 
-  const craftInt = createMockInteraction(userId, { 
-    orb: GAME_CONFIG.ORB_TYPES.KINDLING, 
-    item_id: item._id.toString() 
+  const forgeInt = createMockInteraction(userId, {
+    orb: GAME_CONFIG.ORB_TYPES.KINDLING,
+    item_id: item._id.toString()
   });
-  await craftCmd.execute(craftInt);
-  const craftReply = craftInt.getReply();
-  assert.ok(craftReply.embeds.length > 0 || craftReply.content.includes('FORGE'));
+  await forgeCmd.execute(forgeInt);
+  const forgeReply = forgeInt.getReply();
+  assert.ok(forgeReply.embeds.length > 0 || forgeReply.content.includes('FORGE'));
 });
 
 test('Discord Commands Flow — /tutorial chapters', async () => {

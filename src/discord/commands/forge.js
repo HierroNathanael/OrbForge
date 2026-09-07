@@ -7,7 +7,7 @@ import { createItemTooltip } from '../embeds/uiBuilders.js';
 import { GAME_CONFIG } from '../../config/constants.js';
 
 export const data = new SlashCommandBuilder()
-  .setName('craft')
+  .setName('forge')
   .setDescription('PoE-Style Crafting — Apply Orbs to modify item affixes')
   .addStringOption(opt =>
     opt.setName('orb')

@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import { connectDatabase } from './src/config/database.js';
 import * as characterCmd from './src/discord/commands/character.js';
 import * as treeCmd from './src/discord/commands/tree.js';
-import * as craftCmd from './src/discord/commands/craft.js';
+import * as forgeCmd from './src/discord/commands/forge.js';
 import * as dungeonCmd from './src/discord/commands/dungeon.js';
 import * as tutorialCmd from './src/discord/commands/tutorial.js';
 import * as inventoryCmd from './src/discord/commands/inventory.js';
@@ -16,7 +16,7 @@ const client = new Client({
 
 client.commands = new Collection();
 
-const commands = [characterCmd, treeCmd, craftCmd, dungeonCmd, tutorialCmd, inventoryCmd];
+const commands = [characterCmd, treeCmd, forgeCmd, dungeonCmd, tutorialCmd, inventoryCmd];
 for (const cmd of commands) {
   if (cmd.data && cmd.data.name) {
     client.commands.set(cmd.data.name, cmd);
