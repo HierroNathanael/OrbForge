@@ -1,10 +1,14 @@
-import { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder } from 'discord.js';
+import { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, AttachmentBuilder } from 'discord.js';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
 import { Item } from '../../models/Item.js';
 import { applyCraftingOrb } from '../../game/crafting/craftingEngine.js';
 import { createItemTooltip } from '../embeds/uiBuilders.js';
 import { GAME_CONFIG } from '../../config/constants.js';
+
+const IMAGES_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../images');
 
 export const data = new SlashCommandBuilder()
   .setName('forge')
@@ -72,8 +76,18 @@ export async function execute(interaction) {
   await item.save();
 
   const tooltipEmbed = createItemTooltip(item);
+
+  const imageFile = GAME_CONFIG.ORB_IMAGES[orbType];
+  const files = [];
+  if (imageFile) {
+    const attachmentName = `${orbType}.jpeg`;
+    files.push(new AttachmentBuilder(path.join(IMAGES_DIR, imageFile), { name: attachmentName }));
+    tooltipEmbed.setThumbnail(`attachment://${attachmentName}`);
+  }
+
   return interaction.reply({
     content: `🔮 **FORGE SUCCESSFUL!** ${craftResult.message}`,
-    embeds: [tooltipEmbed]
+    embeds: [tooltipEmbed],
+    files
   });
 }

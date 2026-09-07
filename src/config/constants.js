@@ -27,6 +27,15 @@ export const GAME_CONFIG = {
     ZENITH: 'orb_of_zenith',              // Add a high-tier affix to a rare item
     FATE: 'orb_of_fate'                   // Subclass respec (kept for respec system)
   },
+  // Orb type -> art file in the repo-root images/ folder (no art for FATE yet)
+  ORB_IMAGES: {
+    orb_of_tempering: 'Orb of Tempering.jpeg',
+    orb_of_kindling: 'Orb of Kindling.jpeg',
+    orb_of_unmaking: 'Orb of Unmaking.jpeg',
+    orb_of_cleansing: 'Orb of Cleansing.jpeg',
+    orb_of_ascendance: 'Orb of Ascendance.jpeg',
+    orb_of_zenith: 'Orb of Zenith.jpeg'
+  },
   RARITIES: {
     NORMAL: 'Normal',
     MAGIC: 'Magic',
