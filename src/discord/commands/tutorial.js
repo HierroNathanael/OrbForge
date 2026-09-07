@@ -18,9 +18,10 @@ const TUTORIAL_PAGES = [
       '',
       '**📚 Chapters:**',
       '```',
-      '1. Character   4. Combat & Dungeons',
-      '2. Class        5. Crafting & Orbs',
-      '3. Skill Tree   6. Cheatsheet',
+      '1. Character   5. Crafting & Orbs',
+      '2. Class        6. Economy',
+      '3. Skill Tree   7. Cheatsheet',
+      '4. Combat & Dungeons',
       '```',
       'Use **◀ Prev** / **Next ▶** to navigate.'
     ].join('\n'),
@@ -32,7 +33,7 @@ const TUTORIAL_PAGES = [
     title: '📖 Chapter 1 — Creating Your Character',
     color: '#3498db',
     description: [
-      '3 character slots by default (up to 10 via Shop).',
+      '3 character slots per account.',
       '```',
       '/character create name:<YourName> class:<Class>',
       '```',
@@ -49,7 +50,7 @@ const TUTORIAL_PAGES = [
       },
       {
         name: '⭐ Multiple Characters',
-        value: 'Own several; **active** one used in all commands. Expand slots: `/shop buy item:slot_expansion` (💎 300).',
+        value: 'Own several; **active** one used in all commands.',
         inline: false
       }
     ]
@@ -146,6 +147,11 @@ const TUTORIAL_PAGES = [
         inline: false
       },
       {
+        name: '🔷 Mana',
+        value: 'Skills cost Mana (MP). Not enough MP → skill button disabled, falls back to Attack. MP regens each round.',
+        inline: false
+      },
+      {
         name: '🎁 Loot',
         value: 'Personal, private loot roll per player — independent of party.',
         inline: false
@@ -198,27 +204,14 @@ const TUTORIAL_PAGES = [
     ]
   },
 
-  // Page 6 — Economy & Shop
+  // Page 6 — Economy
   {
-    title: '📖 Chapter 6 — The Economy & Shop',
+    title: '📖 Chapter 6 — The Economy',
     color: '#1abc9c',
-    description: 'Gems never buy combat power directly.',
+    description: 'No real-money currency — everything is earned in-game.',
     fields: [
       { name: '🪙 Gold', value: 'From dungeons. Used for respec, vendor costs.', inline: false },
-      { name: '🔮 Orbs', value: 'Dungeon drops only, never sold. Only way to modify items.', inline: false },
-      { name: '💎 Gems', value: 'Purchased/earned. Only for boosts & account upgrades.\n`/shop view` · `/shop buy item:<choice>`', inline: false },
-      {
-        name: '🛒 Shop Catalogue',
-        value: [
-          '```',
-          '1-Day 2× EXP Boost   →  💎 100',
-          '1-Day 2× Drop Boost  →  💎 150',
-          '+1 Character Slot    →  💎 300',
-          '```',
-          'Boosts queue by highest multiplier first.'
-        ].join('\n'),
-        inline: false
-      }
+      { name: '🔮 Orbs', value: 'Dungeon drops only, never sold. Only way to modify items.', inline: false }
     ]
   },
 
@@ -249,17 +242,13 @@ const TUTORIAL_PAGES = [
         inline: false
       },
       {
-        name: '💎 Shop',
-        value: '`/shop view` · `/shop buy item:<choice>`',
-        inline: false
-      },
-      {
         name: '📊 Combat Formula',
         value: [
           '`Hit  = 1 - evasion/(atk+evasion)` (min 20%)',
           '`Dmg  = raw × (100/(100+armor))`',
           '`Crit = damage × critMultiplier` (base 1.5×)',
-          '`HP   = 100 + (level × classGrowth)`'
+          '`HP   = 100 + (level × classGrowth)`',
+          '`MP   = 20 + (INT × 3) + (level × classGrowth)`'
         ].join('\n'),
         inline: false
       },

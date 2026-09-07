@@ -3,16 +3,18 @@ import { GAME_CONFIG } from '../../config/constants.js';
 
 export function calculateEffectiveStats(character, equippedItems = [], treeStats = {}) {
   const baseClassGrowth = {
-    Warrior: { hp: 12, damage: 2, armor: 1.5, evasion: 0.5 },
-    Ranger: { hp: 9, damage: 2.5, armor: 0.5, evasion: 2.0 },
-    Mage: { hp: 8, damage: 3.0, armor: 0.3, evasion: 0.8 }
-  }[character.className] || { hp: 10, damage: 2, armor: 1, evasion: 1 };
+    Warrior: { hp: 12, damage: 2, armor: 1.5, evasion: 0.5, mana: 1 },
+    Ranger: { hp: 9, damage: 2.5, armor: 0.5, evasion: 2.0, mana: 1.5 },
+    Mage: { hp: 8, damage: 3.0, armor: 0.3, evasion: 0.8, mana: 4 }
+  }[character.className] || { hp: 10, damage: 2, armor: 1, evasion: 1, mana: 1.5 };
 
+  const baseStats = character.baseStats || { strength: 10, dexterity: 10, intelligence: 10 };
   const level = character.level || 1;
   let maxHp = 100 + (level * baseClassGrowth.hp);
   let damage = 10 + (level * baseClassGrowth.damage);
   let armor = 5 + (level * baseClassGrowth.armor);
   let evasion = 5 + (level * baseClassGrowth.evasion);
+  let maxMana = 20 + (baseStats.intelligence * 3) + (level * baseClassGrowth.mana);
   let critChance = 0.05;
   let critMultiplier = 1.50;
   let lifesteal = 0.0;
@@ -23,6 +25,7 @@ export function calculateEffectiveStats(character, equippedItems = [], treeStats
   damage += treeStats.flat_damage || 0;
   armor += treeStats.armor || 0;
   evasion += treeStats.evasion || 0;
+  maxMana += treeStats.mana || 0;
   critChance += treeStats.critical_strike || 0;
   critMultiplier += treeStats.crit_multiplier || 0;
   lifesteal += treeStats.lifesteal || 0;
@@ -43,6 +46,7 @@ export function calculateEffectiveStats(character, equippedItems = [], treeStats
       if (aff.stat === 'health') maxHp += aff.value;
       if (aff.stat === 'armor') armor += aff.value;
       if (aff.stat === 'evasion') evasion += aff.value;
+      if (aff.stat === 'mana') maxMana += aff.value;
       if (aff.stat === 'critical_strike') critChance += aff.value;
       if (aff.stat === 'lifesteal') lifesteal += aff.value;
       if (aff.stat === 'damage_percent') damagePercent += aff.value;
@@ -50,11 +54,15 @@ export function calculateEffectiveStats(character, equippedItems = [], treeStats
   }
 
   damage = Math.round(damage * (1 + damagePercent));
+  maxMana = Math.round(maxMana);
 
   return {
     level,
     maxHp,
     currentHp: maxHp,
+    maxMana,
+    currentMana: maxMana,
+    manaRegenPerRound: Math.round(maxMana * 0.12),
     damage,
     armor,
     evasion,
@@ -71,9 +79,31 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
 
   const roundLogs = [];
 
+  // Resolve mana cost up front — a skill downgrades to a Basic Attack if the caster can't afford it.
+  const effectiveActions = {};
+  for (const member of partyState) {
+    const charId = member.character._id.toString();
+    let action = playerActions[charId] || { type: 'attack' };
+
+    if (action.type === 'skill' && action.skillId) {
+      const skill = SKILL_REGISTRY[action.skillId];
+      const cost = skill && skill.ranks && skill.ranks[0] ? (skill.ranks[0].cost || 0) : 0;
+      if (skill && typeof member.currentMana === 'number') {
+        if (member.currentMana < cost) {
+          roundLogs.push(`🔷 **${member.character.name}** lacked Mana for **${skill.name}** (needs ${cost}, has ${member.currentMana}) — used Basic Attack instead.`);
+          action = { type: 'attack' };
+        } else {
+          member.currentMana -= cost;
+        }
+      }
+    }
+
+    effectiveActions[charId] = action;
+  }
+
   // Phase 1: Support / Buff / Taunt skills
   for (const member of partyState) {
-    const action = playerActions[member.character._id.toString()] || { type: 'attack' };
+    const action = effectiveActions[member.character._id.toString()];
 
     if (action.type === 'skill' && action.skillId) {
       const skill = SKILL_REGISTRY[action.skillId];
@@ -101,7 +131,7 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
   // Phase 2: Player Damage Actions against living enemies
   for (const member of partyState) {
     if (member.currentHp <= 0) continue;
-    const action = playerActions[member.character._id.toString()] || { type: 'attack' };
+    const action = effectiveActions[member.character._id.toString()];
 
     const targetEnemy = enemyList.find(e => e.hp > 0);
     if (!targetEnemy) break; // All enemies defeated
@@ -178,10 +208,13 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
     roundLogs.push(`🩸 **${enemy.name}** hit **${targetPlayer.character.name}** for **${finalDamage} damage**!`);
   }
 
-  // Tick down taunt / temp buffs
+  // Tick down taunt / temp buffs, regen Mana
   for (const member of partyState) {
     if (member.tauntTurns > 0) member.tauntTurns -= 1;
     member.isDefending = false;
+    if (typeof member.currentMana === 'number') {
+      member.currentMana = Math.min(member.stats.maxMana, member.currentMana + (member.stats.manaRegenPerRound || 0));
+    }
   }
 
   const allEnemiesDefeated = enemyList.every(e => e.hp <= 0);

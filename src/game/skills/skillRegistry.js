@@ -25,11 +25,11 @@ export const SKILL_REGISTRY = {
     target: 'self_and_enemies',
     requirements: { strength: 10 },
     ranks: [
-      { rank: 1, armorBonusPercent: 0.35, tauntTurns: 2, cooldown: 2 },
-      { rank: 2, armorBonusPercent: 0.45, tauntTurns: 2, cooldown: 2 },
-      { rank: 3, armorBonusPercent: 0.55, tauntTurns: 2, cooldown: 2 },
-      { rank: 4, armorBonusPercent: 0.65, tauntTurns: 2, cooldown: 2 },
-      { rank: 5, armorBonusPercent: 0.80, tauntTurns: 3, cooldown: 2 }
+      { rank: 1, armorBonusPercent: 0.35, tauntTurns: 2, cost: 0, cooldown: 2 },
+      { rank: 2, armorBonusPercent: 0.45, tauntTurns: 2, cost: 0, cooldown: 2 },
+      { rank: 3, armorBonusPercent: 0.55, tauntTurns: 2, cost: 0, cooldown: 2 },
+      { rank: 4, armorBonusPercent: 0.65, tauntTurns: 2, cost: 0, cooldown: 2 },
+      { rank: 5, armorBonusPercent: 0.80, tauntTurns: 3, cost: 0, cooldown: 2 }
     ]
   },
   whirlwind: {
@@ -57,11 +57,11 @@ export const SKILL_REGISTRY = {
     target: 'single_enemy',
     requirements: { dexterity: 12 },
     ranks: [
-      { rank: 1, damageMultiplier: 1.8, critBonus: 0.20, cooldown: 1 },
-      { rank: 2, damageMultiplier: 2.2, critBonus: 0.25, cooldown: 1 },
-      { rank: 3, damageMultiplier: 2.7, critBonus: 0.30, cooldown: 1 },
-      { rank: 4, damageMultiplier: 3.3, critBonus: 0.35, cooldown: 1 },
-      { rank: 5, damageMultiplier: 4.0, critBonus: 0.40, cooldown: 1 }
+      { rank: 1, damageMultiplier: 1.8, critBonus: 0.20, cost: 0, cooldown: 1 },
+      { rank: 2, damageMultiplier: 2.2, critBonus: 0.25, cost: 0, cooldown: 1 },
+      { rank: 3, damageMultiplier: 2.7, critBonus: 0.30, cost: 0, cooldown: 1 },
+      { rank: 4, damageMultiplier: 3.3, critBonus: 0.35, cost: 0, cooldown: 1 },
+      { rank: 5, damageMultiplier: 4.0, critBonus: 0.40, cost: 0, cooldown: 1 }
     ]
   },
   poison_trap: {
@@ -73,9 +73,9 @@ export const SKILL_REGISTRY = {
     target: 'all_enemies',
     requirements: { dexterity: 10 },
     ranks: [
-      { rank: 1, damageMultiplier: 1.3, cooldown: 1 },
-      { rank: 2, damageMultiplier: 1.6, cooldown: 1 },
-      { rank: 3, damageMultiplier: 2.0, cooldown: 1 }
+      { rank: 1, damageMultiplier: 1.3, cost: 0, cooldown: 1 },
+      { rank: 2, damageMultiplier: 1.6, cost: 0, cooldown: 1 },
+      { rank: 3, damageMultiplier: 2.0, cost: 0, cooldown: 1 }
     ]
   },
 
@@ -105,9 +105,9 @@ export const SKILL_REGISTRY = {
     target: 'single_enemy',
     requirements: { intelligence: 12 },
     ranks: [
-      { rank: 1, damageMultiplier: 2.0, cooldown: 1 },
-      { rank: 2, damageMultiplier: 2.5, cooldown: 1 },
-      { rank: 3, damageMultiplier: 3.1, cooldown: 1 }
+      { rank: 1, damageMultiplier: 2.0, cost: 12, cooldown: 1 },
+      { rank: 2, damageMultiplier: 2.5, cost: 16, cooldown: 1 },
+      { rank: 3, damageMultiplier: 3.1, cost: 20, cooldown: 1 }
     ]
   },
   divine_heal: {
@@ -119,9 +119,9 @@ export const SKILL_REGISTRY = {
     target: 'all_allies',
     requirements: { intelligence: 10 },
     ranks: [
-      { rank: 1, healAmount: 40, healPercent: 0.20, cooldown: 2 },
-      { rank: 2, healAmount: 75, healPercent: 0.25, cooldown: 2 },
-      { rank: 3, healAmount: 120, healPercent: 0.30, cooldown: 2 }
+      { rank: 1, healAmount: 40, healPercent: 0.20, cost: 15, cooldown: 2 },
+      { rank: 2, healAmount: 75, healPercent: 0.25, cost: 20, cooldown: 2 },
+      { rank: 3, healAmount: 120, healPercent: 0.30, cost: 25, cooldown: 2 }
     ]
   }
 };

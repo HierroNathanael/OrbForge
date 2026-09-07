@@ -4,7 +4,6 @@ import { data as characterCmd } from './commands/character.js';
 import { data as treeCmd } from './commands/tree.js';
 import { data as craftCmd } from './commands/craft.js';
 import { data as dungeonCmd } from './commands/dungeon.js';
-import { data as shopCmd } from './commands/shop.js';
 import { data as tutorialCmd } from './commands/tutorial.js';
 import { data as inventoryCmd } from './commands/inventory.js';
 
@@ -15,7 +14,6 @@ const commands = [
   treeCmd.toJSON(),
   craftCmd.toJSON(),
   dungeonCmd.toJSON(),
-  shopCmd.toJSON(),
   tutorialCmd.toJSON(),
   inventoryCmd.toJSON()
 ];

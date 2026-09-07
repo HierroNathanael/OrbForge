@@ -16,8 +16,7 @@ export const GAME_CONFIG = {
   },
   CURRENCY_TYPES: {
     GOLD: 'gold',
-    ORBS: 'orbs',
-    GEMS: 'gems'
+    ORBS: 'orbs'
   },
   ORB_TYPES: {
     TEMPERING: 'orb_of_tempering',       // Add a random affix to a magic item

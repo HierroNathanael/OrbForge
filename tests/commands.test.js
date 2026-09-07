@@ -8,7 +8,6 @@ import * as treeCmd from '../src/discord/commands/tree.js';
 import * as dungeonCmd from '../src/discord/commands/dungeon.js';
 import * as inventoryCmd from '../src/discord/commands/inventory.js';
 import * as craftCmd from '../src/discord/commands/craft.js';
-import * as shopCmd from '../src/discord/commands/shop.js';
 import * as tutorialCmd from '../src/discord/commands/tutorial.js';
 import { GAME_CONFIG } from '../src/config/constants.js';
 
@@ -170,22 +169,17 @@ test('Discord Commands Flow — /inventory view, equip, and /craft with dropped 
   assert.ok(craftReply.embeds.length > 0 || craftReply.content.includes('FORGE'));
 });
 
-test('Discord Commands Flow — /shop view and /tutorial chapters', async () => {
+test('Discord Commands Flow — /tutorial chapters', async () => {
   const userId = 'user_123';
 
-  // 1. /shop view
-  const shopInt = createMockInteraction(userId, { subcommand: 'view' });
-  await shopCmd.execute(shopInt);
-  assert.equal(shopInt.getReply().embeds.length, 1);
-
-  // 2. /tutorial
+  // 1. /tutorial
   const tutInt = createMockInteraction(userId, { chapter: 1 });
   await tutorialCmd.execute(tutInt);
   const tutReply = tutInt.getReply();
   assert.equal(tutReply.embeds.length, 1);
   assert.equal(tutReply.components.length, 1);
 
-  // 3. /tutorial button next
+  // 2. /tutorial button next
   const tutBtnInt = createMockInteraction(userId, {}, `tutorial:next:0:${userId}`);
   await tutorialCmd.handleTutorialButton(tutBtnInt);
   assert.ok(tutBtnInt.getReply().isUpdated);

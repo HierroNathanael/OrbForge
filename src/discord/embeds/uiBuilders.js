@@ -2,14 +2,16 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelec
 import { BASE_CLASSES } from '../../game/classes/classData.js';
 import { SKILL_TREE_DATA } from '../../game/skillTree/treeData.js';
 import { getEligibleNodes, accumulateTreeStats } from '../../game/skillTree/treeEngine.js';
+import { calculateEffectiveStats } from '../../game/combat/combatEngine.js';
 
-export function createCharacterProfileEmbed(character, userGems = 0) {
+export function createCharacterProfileEmbed(character, equippedItems = []) {
   const classInfo = BASE_CLASSES[character.className] || { primaryStat: 'strength' };
   const subclassName = character.subclassName ? ` (${character.subclassName})` : ' (No Subclass)';
 
   const treeStats = accumulateTreeStats(character.className, character.passiveTree);
+  const stats = calculateEffectiveStats(character, equippedItems, treeStats);
   const orbsObj = character.orbs?.toObject ? character.orbs.toObject() : (character.orbs || {});
-  
+
   const orbList = Object.entries(orbsObj)
     .filter(([k, qty]) => typeof qty === 'number' && qty > 0 && !k.startsWith('$') && k !== '_id')
     .map(([orbKey, qty]) => `• **${orbKey.replace(/_/g, ' ')}**: x${qty}`)
@@ -21,7 +23,9 @@ export function createCharacterProfileEmbed(character, userGems = 0) {
     .setThumbnail('https://cdn-icons-png.flaticon.com/512/3408/3408591.png')
     .addFields(
       { name: '📊 Class & Archetype', value: `**Class**: ${character.className}\n**Primary Stat**: ${classInfo.primaryStat.toUpperCase()}`, inline: true },
-      { name: '💰 Currencies', value: `🪙 **Gold**: ${character.gold.toLocaleString()}\n💎 **Gems**: ${userGems.toLocaleString()}`, inline: true },
+      { name: '❤️ HP / 🔷 Mana', value: `**HP**: ${stats.maxHp}\n**Mana**: ${stats.maxMana}`, inline: true },
+      { name: '⚔️ Combat Stats', value: `**Damage**: ${stats.damage}\n**Armor**: ${stats.armor}\n**Evasion**: ${stats.evasion}\n**Crit**: ${(stats.critChance * 100).toFixed(0)}%`, inline: true },
+      { name: '🪙 Gold', value: `${character.gold.toLocaleString()}`, inline: true },
       { name: '✨ Experience', value: `**XP**: ${character.xp.toLocaleString()}`, inline: true },
       { name: '🔮 Crafting Orbs Inventory', value: orbList, inline: false },
       { name: '🌲 Skill Tree Progress', value: `Points Available: **${character.skillPoints.available}** | Spent: **${character.skillPoints.spent}**`, inline: false }
@@ -112,7 +116,7 @@ export function createItemTooltip(item) {
 export function createCombatEmbed(encounterState) {
   const { mapTicket, round, partyState, enemyList, logs } = encounterState;
 
-  const playerStatus = partyState.map(m => `🛡️ **${m.character.name}**: ${Math.max(0, m.currentHp)}/${m.stats.maxHp} HP`).join('\n');
+  const playerStatus = partyState.map(m => `🛡️ **${m.character.name}**: ${Math.max(0, m.currentHp)}/${m.stats.maxHp} HP | ${Math.max(0, m.currentMana ?? 0)}/${m.stats.maxMana} MP`).join('\n');
   const enemyStatus = enemyList.map(e => `${e.isBoss ? '👑' : '👾'} **${e.name}**: ${Math.max(0, e.hp)}/${e.maxHp} HP`).join('\n');
   const logText = logs.length > 0 ? logs.join('\n') : '*Battle has begun! Pick your actions for this round.*';
 
@@ -129,7 +133,7 @@ export function createCombatEmbed(encounterState) {
 
 import { getCharacterCombatSkills } from '../../game/skills/skillRegistry.js';
 
-export function createCombatActionButtons(character) {
+export function createCombatActionButtons(character, currentMana = Infinity) {
   const characterId = character._id ? character._id.toString() : character.toString();
   const skills = typeof character === 'object' && character.className ? getCharacterCombatSkills(character) : [];
 
@@ -142,11 +146,13 @@ export function createCombatActionButtons(character) {
 
   for (const skill of skills.slice(0, 2)) {
     const style = (skill.role === 'tank' || skill.role === 'support') ? ButtonStyle.Success : ButtonStyle.Danger;
+    const cost = skill.ranks && skill.ranks[0] ? (skill.ranks[0].cost || 0) : 0;
     row.addComponents(
       new ButtonBuilder()
         .setCustomId(`combat:skill:${skill.id}:${characterId}`)
-        .setLabel(`${skill.name} ${skill.emoji || '✨'}`)
+        .setLabel(`${skill.name} ${skill.emoji || '✨'}${cost > 0 ? ` (${cost} MP)` : ''}`)
         .setStyle(style)
+        .setDisabled(currentMana < cost)
     );
   }
 

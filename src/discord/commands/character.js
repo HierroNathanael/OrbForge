@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
+import { Item } from '../../models/Item.js';
 import { BASE_CLASSES } from '../../game/classes/classData.js';
 import { createCharacterProfileEmbed } from '../embeds/uiBuilders.js';
 
@@ -73,10 +74,10 @@ export async function execute(interaction) {
     user.activeCharacterId = newCharacter._id;
     await user.save();
 
-    const embed = createCharacterProfileEmbed(newCharacter, user.gems);
-    return interaction.reply({ 
-      content: `🎉 Successfully created character **${name}** standard class **${className}**!`, 
-      embeds: [embed] 
+    const embed = createCharacterProfileEmbed(newCharacter);
+    return interaction.reply({
+      content: `🎉 Successfully created character **${name}** standard class **${className}**!`,
+      embeds: [embed]
     });
   }
 
@@ -93,7 +94,8 @@ export async function execute(interaction) {
       return interaction.reply({ content: '❌ Active character not found. Create one with `/character create`!', ephemeral: true });
     }
 
-    const embed = createCharacterProfileEmbed(character, user.gems);
+    const equippedItems = await Item.find({ characterId: character._id, isEquipped: true });
+    const embed = createCharacterProfileEmbed(character, equippedItems);
     return interaction.reply({ embeds: [embed] });
   }
 

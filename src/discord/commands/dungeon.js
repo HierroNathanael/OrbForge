@@ -56,6 +56,7 @@ export async function execute(interaction) {
       character,
       stats,
       currentHp: stats.maxHp,
+      currentMana: stats.maxMana,
       tauntTurns: 0,
       armorBuffPercent: 0
     }
@@ -82,7 +83,7 @@ export async function execute(interaction) {
   activeDungeonBattles.set(battleId, encounterState);
 
   const embed = createCombatEmbed(encounterState);
-  const actionRow = createCombatActionButtons(character);
+  const actionRow = createCombatActionButtons(character, partyState[0].currentMana);
 
   return interaction.reply({
     embeds: [embed],
@@ -197,7 +198,7 @@ export async function handleCombatButton(interaction) {
 
     // Battle continues
     const embed = createCombatEmbed(targetBattle);
-    const actionRow = createCombatActionButtons(targetBattle.partyState[0].character);
+    const actionRow = createCombatActionButtons(targetBattle.partyState[0].character, targetBattle.partyState[0].currentMana);
 
     return interaction.update({
       embeds: [embed],
