@@ -113,12 +113,20 @@ test('Discord Commands Flow — /tree view, allocate, respec', async () => {
 test('Discord Commands Flow — /dungeon enter and combat buttons to victory', async () => {
   const userId = 'user_123';
 
-  // 1. Enter Tier 0 tutorial dungeon
+  // 1. Enter Tier 0 tutorial dungeon (opens a party lobby)
   const enterInt = createMockInteraction(userId, { subcommand: 'enter', tier: 0 });
   await dungeonCmd.execute(enterInt);
   const enterReply = enterInt.getReply();
   assert.equal(enterReply.embeds.length, 1);
   assert.ok(enterReply.components.length > 0);
+
+  const lobby = Array.from(dungeonCmd.activeDungeonLobbies.values())[0];
+  assert.ok(lobby);
+
+  // 2. Leader starts the dungeon solo
+  const startInt = createMockInteraction(userId, {}, `dungeon:start:${lobby.lobbyId}`);
+  await dungeonCmd.handleLobbyButton(startInt);
+  assert.equal(dungeonCmd.activeDungeonLobbies.has(lobby.lobbyId), false, 'Lobby should close once started');
 
   // Get active battle and character ID
   const activeBattles = Array.from(dungeonCmd.activeDungeonBattles.values());
@@ -138,6 +146,64 @@ test('Discord Commands Flow — /dungeon enter and combat buttons to victory', a
   assert.equal(dungeonCmd.activeDungeonBattles.has(battle.battleId), false, 'Battle should finish and clear from active state');
 });
 
+test('Discord Commands Flow — /dungeon party join, cap at 3, and leader-only start', async () => {
+  const leaderId = 'party_leader';
+  const mate1Id = 'party_mate_1';
+  const mate2Id = 'party_mate_2';
+  const mate3Id = 'party_mate_3';
+
+  for (const [id, name] of [[leaderId, 'Leader'], [mate1Id, 'Mate1'], [mate2Id, 'Mate2'], [mate3Id, 'Mate3']]) {
+    const createInt = createMockInteraction(id, { subcommand: 'create', name, class: 'Warrior' });
+    await characterCmd.execute(createInt);
+  }
+
+  // Leader opens a lobby
+  const enterInt = createMockInteraction(leaderId, { subcommand: 'enter', tier: 0 });
+  await dungeonCmd.execute(enterInt);
+  const lobby = Array.from(dungeonCmd.activeDungeonLobbies.values()).find(l => l.leaderId === leaderId);
+  assert.ok(lobby);
+
+  // Non-leader can't start an under-full lobby
+  const earlyStartInt = createMockInteraction(mate1Id, {}, `dungeon:start:${lobby.lobbyId}`);
+  await dungeonCmd.handleLobbyButton(earlyStartInt);
+  assert.ok(earlyStartInt.getReply().content.includes('Only the party leader'));
+
+  // Two teammates join, filling the party to GAME_CONFIG.PARTY_SIZE_MAX (3)
+  const join1Int = createMockInteraction(mate1Id, {}, `dungeon:join:${lobby.lobbyId}`);
+  await dungeonCmd.handleLobbyButton(join1Int);
+  const join2Int = createMockInteraction(mate2Id, {}, `dungeon:join:${lobby.lobbyId}`);
+  await dungeonCmd.handleLobbyButton(join2Int);
+  assert.equal(lobby.members.length, GAME_CONFIG.PARTY_SIZE_MAX);
+
+  // A 4th player is rejected — party is full
+  const join3Int = createMockInteraction(mate3Id, {}, `dungeon:join:${lobby.lobbyId}`);
+  await dungeonCmd.handleLobbyButton(join3Int);
+  assert.ok(join3Int.getReply().content.includes('full'));
+  assert.equal(lobby.members.length, GAME_CONFIG.PARTY_SIZE_MAX);
+
+  // Leader starts the full party
+  const startInt = createMockInteraction(leaderId, {}, `dungeon:start:${lobby.lobbyId}`);
+  await dungeonCmd.handleLobbyButton(startInt);
+  assert.equal(dungeonCmd.activeDungeonLobbies.has(lobby.lobbyId), false);
+
+  const battle = Array.from(dungeonCmd.activeDungeonBattles.values()).find(b => b.partyState.length === GAME_CONFIG.PARTY_SIZE_MAX);
+  assert.ok(battle, 'Battle should launch with all 3 party members');
+
+  // Each living member can act; round resolves once every living member has submitted
+  let maxRounds = 20;
+  while (dungeonCmd.activeDungeonBattles.has(battle.battleId) && maxRounds > 0) {
+    maxRounds--;
+    for (const member of battle.partyState) {
+      if (member.currentHp <= 0) continue;
+      const attackInt = createMockInteraction(leaderId, {}, `combat:attack:${member.character._id.toString()}`);
+      await dungeonCmd.handleCombatButton(attackInt);
+      if (!dungeonCmd.activeDungeonBattles.has(battle.battleId)) break;
+    }
+  }
+
+  assert.equal(dungeonCmd.activeDungeonBattles.has(battle.battleId), false, 'Party battle should resolve to victory or defeat');
+});
+
 test('Discord Commands Flow — /inventory view, equip, and /forge with dropped Orbs', async () => {
   const userId = 'user_123';
 
@@ -149,8 +215,21 @@ test('Discord Commands Flow — /inventory view, equip, and /forge with dropped 
 
   // 2. /inventory inspect or equip first found item
   const char = await mongoose.model('Character').findOne({ discordId: userId });
-  const item = await mongoose.model('Item').findOne({ characterId: char._id });
-  assert.ok(item, 'Item should have dropped from dungeon');
+  let item = await mongoose.model('Item').findOne({ characterId: char._id });
+  // Gear drop from the prior dungeon run is a 50% RNG roll (combatEngine.js
+  // generatePersonalInstancedLoot) — not guaranteed. This test only cares
+  // about the equip/forge flow, so seed one deterministically if none dropped.
+  if (!item) {
+    item = await mongoose.model('Item').create({
+      characterId: char._id,
+      baseItemId: 'test_sword',
+      name: 'Test Sword',
+      type: 'weapon',
+      rarity: 'Normal',
+      iLvl: 1,
+      baseStats: { damage: 5 }
+    });
+  }
 
   const equipInt = createMockInteraction(userId, { subcommand: 'equip', item_id: item._id.toString() });
   await inventoryCmd.execute(equipInt);

@@ -56,6 +56,8 @@ client.on(Events.InteractionCreate, async interaction => {
   } else if (interaction.isButton()) {
     if (interaction.customId.startsWith('combat:') || interaction.customId.startsWith('combat_')) {
       await dungeonCmd.handleCombatButton(interaction);
+    } else if (interaction.customId.startsWith('dungeon:')) {
+      await dungeonCmd.handleLobbyButton(interaction);
     } else if (interaction.customId.startsWith('tutorial:') || interaction.customId.startsWith('tutorial_')) {
       await tutorialCmd.handleTutorialButton(interaction);
     }

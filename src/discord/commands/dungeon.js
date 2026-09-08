@@ -4,10 +4,45 @@ import { Character } from '../../models/Character.js';
 import { Item } from '../../models/Item.js';
 import { generateMapTicket, generateEncounterMonsters } from '../../game/maps/mapEngine.js';
 import { calculateEffectiveStats, resolveCombatRound, generatePersonalInstancedLoot } from '../../game/combat/combatEngine.js';
-import { createCombatEmbed, createCombatActionButtons } from '../embeds/uiBuilders.js';
+import { createCombatEmbed, createCombatActionButtons, createLobbyEmbed, createLobbyButtons } from '../embeds/uiBuilders.js';
 import { accumulateTreeStats } from '../../game/skillTree/treeEngine.js';
+import { resolveLevelUps, GAME_CONFIG } from '../../config/constants.js';
 
 export const activeDungeonBattles = new Map();
+export const activeDungeonLobbies = new Map();
+
+function clearStaleEntriesForCharacter(characterId) {
+  const idStr = characterId.toString();
+  for (const [id, lobby] of activeDungeonLobbies.entries()) {
+    if (lobby.members.some(m => m.character._id.toString() === idStr)) {
+      activeDungeonLobbies.delete(id);
+    }
+  }
+  for (const [id, state] of activeDungeonBattles.entries()) {
+    if (state.partyState.some(m => m.character._id.toString() === idStr)) {
+      activeDungeonBattles.delete(id);
+    }
+  }
+}
+
+async function buildPartyState(members) {
+  const partyState = [];
+  for (const member of members) {
+    const equippedItems = await Item.find({ characterId: member.character._id, isEquipped: true });
+    const treeStats = accumulateTreeStats(member.character.className, member.character.passiveTree);
+    const stats = calculateEffectiveStats(member.character, equippedItems, treeStats);
+    partyState.push({
+      character: member.character,
+      stats,
+      currentHp: stats.maxHp,
+      currentMana: stats.maxMana,
+      tauntTurns: 0,
+      armorBuffPercent: 0
+    });
+  }
+  return partyState;
+}
+
 
 export const data = new SlashCommandBuilder()
   .setName('dungeon')
@@ -43,52 +78,94 @@ export async function execute(interaction) {
   // Default to Tier 0 (Tutorial) if character level <= 2, otherwise Tier 1
   const tier = selectedTier !== null ? selectedTier : (character.level <= 2 ? 0 : 1);
 
-  // Subcommand === 'enter' (Manual run)
-  const equippedItems = await Item.find({ characterId: character._id, isEquipped: true });
-  const treeStats = accumulateTreeStats(character.className, character.passiveTree);
-  const stats = calculateEffectiveStats(character, equippedItems, treeStats);
+  // Subcommand === 'enter' — open a party lobby. Leader clicks Start to launch
+  // the encounter immediately (solo) or once teammates have joined (party).
+  clearStaleEntriesForCharacter(character._id);
 
-  const mapTicket = generateMapTicket(tier);
-  const enemyList = generateEncounterMonsters(mapTicket);
-
-  const partyState = [
-    {
-      character,
-      stats,
-      currentHp: stats.maxHp,
-      currentMana: stats.maxMana,
-      tauntTurns: 0,
-      armorBuffPercent: 0
-    }
-  ];
-
-  // Remove any stale battles for this character
-  for (const [id, state] of activeDungeonBattles.entries()) {
-    if (state.partyState.some(m => m.character._id.toString() === character._id.toString())) {
-      activeDungeonBattles.delete(id);
-    }
-  }
-
-  const battleId = `battle_${character._id}_${Date.now()}`;
-  const encounterState = {
-    battleId,
-    mapTicket,
-    round: 1,
-    partyState,
-    enemyList,
-    pendingActions: {},
-    logs: [`⚔️ **Encounter Started**: Entering ${mapTicket.name}! Choose your action below:`]
+  const lobbyId = `lobby_${character._id}_${Date.now()}`;
+  const lobby = {
+    lobbyId,
+    tier,
+    leaderId: discordId,
+    members: [{ discordId, character }]
   };
-
-  activeDungeonBattles.set(battleId, encounterState);
-
-  const embed = createCombatEmbed(encounterState);
-  const actionRows = createCombatActionButtons(character, partyState[0].currentMana, enemyList);
+  activeDungeonLobbies.set(lobbyId, lobby);
 
   return interaction.reply({
-    embeds: [embed],
-    components: actionRows
+    embeds: [createLobbyEmbed(lobby)],
+    components: createLobbyButtons(lobby)
   });
+}
+
+export async function handleLobbyButton(interaction) {
+  const [, action, lobbyId] = interaction.customId.split(':');
+  const lobby = activeDungeonLobbies.get(lobbyId);
+
+  if (!lobby) {
+    return interaction.reply({
+      content: '⚠️ This party lobby has expired or already started. Use `/dungeon enter` to start a new one!',
+      ephemeral: true
+    });
+  }
+
+  if (action === 'join') {
+    if (lobby.members.some(m => m.discordId === interaction.user.id)) {
+      return interaction.reply({ content: '❌ You are already in this party.', ephemeral: true });
+    }
+    if (lobby.members.length >= GAME_CONFIG.PARTY_SIZE_MAX) {
+      return interaction.reply({ content: `❌ Party is full (max ${GAME_CONFIG.PARTY_SIZE_MAX}).`, ephemeral: true });
+    }
+
+    const joinUser = await User.findOne({ discordId: interaction.user.id });
+    if (!joinUser || !joinUser.activeCharacterId) {
+      return interaction.reply({ content: '❌ You need an active character first! Use `/character create` to make one.', ephemeral: true });
+    }
+    const joinCharacter = await Character.findById(joinUser.activeCharacterId);
+    if (!joinCharacter) {
+      return interaction.reply({ content: '❌ Active character not found. Create one with `/character create`!', ephemeral: true });
+    }
+
+    lobby.members.push({ discordId: interaction.user.id, character: joinCharacter });
+
+    return interaction.update({
+      embeds: [createLobbyEmbed(lobby)],
+      components: createLobbyButtons(lobby)
+    });
+  }
+
+  if (action === 'start') {
+    if (interaction.user.id !== lobby.leaderId) {
+      return interaction.reply({ content: '❌ Only the party leader can start the dungeon.', ephemeral: true });
+    }
+
+    activeDungeonLobbies.delete(lobbyId);
+    for (const member of lobby.members) clearStaleEntriesForCharacter(member.character._id);
+
+    const partyState = await buildPartyState(lobby.members);
+    const mapTicket = generateMapTicket(lobby.tier);
+    const enemyList = generateEncounterMonsters(mapTicket);
+
+    const battleId = `battle_${lobby.leaderId}_${Date.now()}`;
+    const encounterState = {
+      battleId,
+      mapTicket,
+      round: 1,
+      partyState,
+      enemyList,
+      pendingActions: {},
+      logs: [`⚔️ **Encounter Started**: Entering ${mapTicket.name} with a party of ${partyState.length}! Choose your action below:`]
+    };
+
+    activeDungeonBattles.set(battleId, encounterState);
+
+    const embed = createCombatEmbed(encounterState);
+    const actionRows = createCombatActionButtons(partyState, enemyList);
+
+    return interaction.update({
+      embeds: [embed],
+      components: actionRows
+    });
+  }
 }
 
 export async function handleCombatButton(interaction) {
@@ -163,37 +240,42 @@ export async function handleCombatButton(interaction) {
     targetBattle.round += 1;
 
     if (roundResult.allEnemiesDefeated) {
-      // Victory! Award personal instanced loot (100% full normal loot)
-      const loot = generatePersonalInstancedLoot(targetBattle.partyState[0].character, targetBattle.mapTicket.tier);
-      
-      const char = targetBattle.partyState[0].character;
-      char.gold += loot.gold;
-      char.xp += loot.xp;
+      // Victory! Every party member gets their own personal instanced loot roll (100% full normal loot).
+      const summaries = [];
+      for (const member of targetBattle.partyState) {
+        const loot = generatePersonalInstancedLoot(member.character, targetBattle.mapTicket.tier);
 
-      // Add Orbs
-      for (const orbKey of loot.orbDrops) {
-        const cur = char.orbs.get ? char.orbs.get(orbKey) : (char.orbs[orbKey] || 0);
-        if (char.orbs.set) char.orbs.set(orbKey, cur + 1);
-        else char.orbs[orbKey] = cur + 1;
-      }
+        const char = member.character;
+        char.gold += loot.gold;
+        char.xp += loot.xp;
+        const levelsGained = resolveLevelUps(char);
 
-      await char.save();
+        for (const orbKey of loot.orbDrops) {
+          const cur = char.orbs.get ? char.orbs.get(orbKey) : (char.orbs[orbKey] || 0);
+          if (char.orbs.set) char.orbs.set(orbKey, cur + 1);
+          else char.orbs[orbKey] = cur + 1;
+        }
 
-      // Save gear items
-      for (const itemData of loot.items) {
-        await Item.create({
-          characterId: char._id,
-          ...itemData
-        });
+        await char.save();
+
+        for (const itemData of loot.items) {
+          await Item.create({
+            characterId: char._id,
+            ...itemData
+          });
+        }
+
+        const orbText = loot.orbDrops.map(o => `• **${o.replace(/_/g, ' ')}**`).join('\n') || '*None*';
+        const gearText = loot.items.map(i => `• **${i.name}** [${i.rarity}] (ID: \`${i.baseItemId}\`)`).join('\n') || '*None*';
+        const levelText = levelsGained > 0 ? ` (🎉 **+${levelsGained} Level Up!** Now Level ${char.level})` : '';
+
+        summaries.push(`**${char.name}** — 💰 +${loot.gold} Gold | ✨ +${loot.xp} XP${levelText}\n🔮 Orbs:\n${orbText}\n🗡️ Gear:\n${gearText}`);
       }
 
       activeDungeonBattles.delete(targetBattle.battleId);
 
-      const orbText = loot.orbDrops.map(o => `• **${o.replace(/_/g, ' ')}**`).join('\n') || '*None*';
-      const gearText = loot.items.map(i => `• **${i.name}** [${i.rarity}] (ID: \`${i.baseItemId}\`)`).join('\n') || '*None*';
-
       return interaction.update({
-        content: `🏆 **VICTORY DEFEATED ALL MONSTERS!**\n\n💰 **Gold**: +${loot.gold}\n✨ **XP**: +${loot.xp}\n🔮 **Orbs Dropped**:\n${orbText}\n🗡️ **Gear Dropped**:\n${gearText}\n\n*Use \`/inventory\` to view gear and \`/tree allocate\` to spend skill points!*`,
+        content: `🏆 **VICTORY DEFEATED ALL MONSTERS!**\n\n${summaries.join('\n\n')}\n\n*Use \`/inventory\` to view gear and \`/tree allocate\` to spend skill points!*`,
         embeds: [],
         components: []
       });
@@ -210,7 +292,7 @@ export async function handleCombatButton(interaction) {
 
     // Battle continues
     const embed = createCombatEmbed(targetBattle);
-    const actionRows = createCombatActionButtons(targetBattle.partyState[0].character, targetBattle.partyState[0].currentMana, targetBattle.enemyList);
+    const actionRows = createCombatActionButtons(targetBattle.partyState, targetBattle.enemyList);
 
     return interaction.update({
       embeds: [embed],
