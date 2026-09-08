@@ -4,6 +4,7 @@ import { Character } from '../../models/Character.js';
 import { Item } from '../../models/Item.js';
 import { BASE_CLASSES } from '../../game/classes/classData.js';
 import { createCharacterProfileEmbed } from '../embeds/uiBuilders.js';
+import { resolveLevelUps } from '../../config/constants.js';
 
 export const data = new SlashCommandBuilder()
   .setName('character')
@@ -92,6 +93,10 @@ export async function execute(interaction) {
     const character = await Character.findById(user.activeCharacterId);
     if (!character) {
       return interaction.reply({ content: '❌ Active character not found. Create one with `/character create`!', ephemeral: true });
+    }
+
+    if (resolveLevelUps(character) > 0) {
+      await character.save();
     }
 
     const equippedItems = await Item.find({ characterId: character._id, isEquipped: true });

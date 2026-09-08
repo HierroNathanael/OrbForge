@@ -1,5 +1,6 @@
 export const GAME_CONFIG = {
   LEVEL_CAP: 100,
+  XP_PER_LEVEL_FACTOR: 200, // XP needed to clear a level = level * this
   BASE_CHARACTER_SLOTS: 3,
   MAX_CHARACTER_SLOTS: 10,
   PARTY_SIZE_MAX: 3,
@@ -44,3 +45,20 @@ export const GAME_CONFIG = {
   },
   EQUIPMENT_SLOTS: ['weapon', 'helm', 'chest', 'boots', 'ring', 'amulet']
 };
+
+export function xpToNextLevel(level) {
+  return level * GAME_CONFIG.XP_PER_LEVEL_FACTOR;
+}
+
+// Mutates character.level/xp/skillPoints.available to clear any backlog of
+// earned-but-unresolved level-ups. Idempotent — safe to call on every read.
+export function resolveLevelUps(character) {
+  let levelsGained = 0;
+  while (character.level < GAME_CONFIG.LEVEL_CAP && character.xp >= xpToNextLevel(character.level)) {
+    character.xp -= xpToNextLevel(character.level);
+    character.level += 1;
+    character.skillPoints.available += 1;
+    levelsGained += 1;
+  }
+  return levelsGained;
+}
