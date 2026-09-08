@@ -9,6 +9,7 @@ import * as dungeonCmd from '../src/discord/commands/dungeon.js';
 import * as inventoryCmd from '../src/discord/commands/inventory.js';
 import * as forgeCmd from '../src/discord/commands/forge.js';
 import * as tutorialCmd from '../src/discord/commands/tutorial.js';
+import * as tradeCmd from '../src/discord/commands/trade.js';
 import { GAME_CONFIG } from '../src/config/constants.js';
 
 let mongoServer;
@@ -29,7 +30,8 @@ function createMockInteraction(userId, options = {}, customId = null) {
       getSubcommand: () => options.subcommand || null,
       getString: (name) => options[name] ?? null,
       getInteger: (name) => options[name] ?? null,
-      getBoolean: (name) => options[name] ?? null
+      getBoolean: (name) => options[name] ?? null,
+      getUser: (name) => options[name] ?? null
     },
     reply: async (data) => {
       repliedContent = typeof data === 'string' ? data : data.content;
@@ -246,6 +248,94 @@ test('Discord Commands Flow — /inventory view, equip, and /forge with dropped 
   await forgeCmd.execute(forgeInt);
   const forgeReply = forgeInt.getReply();
   assert.ok(forgeReply.embeds.length > 0 || forgeReply.content.includes('FORGE'));
+});
+
+test('Discord Commands Flow — /trade offer, accept swaps item + gold both ways', async () => {
+  const sellerId = 'trader_seller';
+  const buyerId = 'trader_buyer';
+
+  await characterCmd.execute(createMockInteraction(sellerId, { subcommand: 'create', name: 'Seller', class: 'Warrior' }));
+  await characterCmd.execute(createMockInteraction(buyerId, { subcommand: 'create', name: 'Buyer', class: 'Ranger' }));
+
+  const seller = await mongoose.model('Character').findOne({ discordId: sellerId });
+  const buyer = await mongoose.model('Character').findOne({ discordId: buyerId });
+
+  const item = await mongoose.model('Item').create({
+    characterId: seller._id,
+    baseItemId: 'trade_test_bow',
+    name: 'Trade Test Bow',
+    type: 'weapon',
+    rarity: 'Normal',
+    iLvl: 1
+  });
+
+  const sellerGoldBefore = seller.gold;
+  const buyerGoldBefore = buyer.gold;
+
+  // Seller offers the item for 40 gold from buyer
+  const offerInt = createMockInteraction(sellerId, {
+    subcommand: 'offer',
+    target: { id: buyerId, username: 'Buyer', bot: false },
+    give_item: item._id.toString(),
+    for_gold: 40
+  });
+  await tradeCmd.execute(offerInt);
+  assert.ok(offerInt.getReply().components.length > 0, 'Offer should render Accept/Decline buttons');
+
+  const offer = Array.from(tradeCmd.activeTradeOffers.values())[0];
+  assert.ok(offer);
+
+  // Buyer accepts
+  const acceptInt = createMockInteraction(buyerId, {}, `trade:accept:${offer.tradeId}`);
+  await tradeCmd.handleTradeButton(acceptInt);
+  assert.ok(acceptInt.getReply().content.includes('Trade complete'));
+  assert.equal(tradeCmd.activeTradeOffers.has(offer.tradeId), false, 'Offer should clear after accept');
+
+  const updatedItem = await mongoose.model('Item').findById(item._id);
+  assert.equal(updatedItem.characterId.toString(), buyer._id.toString(), 'Item should now belong to buyer');
+
+  const updatedSeller = await mongoose.model('Character').findById(seller._id);
+  const updatedBuyer = await mongoose.model('Character').findById(buyer._id);
+  assert.equal(updatedSeller.gold, sellerGoldBefore + 40);
+  assert.equal(updatedBuyer.gold, buyerGoldBefore - 40);
+});
+
+test('Discord Commands Flow — /trade decline leaves item and gold untouched', async () => {
+  const sellerId = 'trader_seller_2';
+  const buyerId = 'trader_buyer_2';
+
+  await characterCmd.execute(createMockInteraction(sellerId, { subcommand: 'create', name: 'Seller2', class: 'Warrior' }));
+  await characterCmd.execute(createMockInteraction(buyerId, { subcommand: 'create', name: 'Buyer2', class: 'Ranger' }));
+
+  const seller = await mongoose.model('Character').findOne({ discordId: sellerId });
+  const buyer = await mongoose.model('Character').findOne({ discordId: buyerId });
+
+  const item = await mongoose.model('Item').create({
+    characterId: seller._id,
+    baseItemId: 'trade_test_shield',
+    name: 'Trade Test Shield',
+    type: 'chest',
+    rarity: 'Normal',
+    iLvl: 1
+  });
+
+  const offerInt = createMockInteraction(sellerId, {
+    subcommand: 'offer',
+    target: { id: buyerId, username: 'Buyer2', bot: false },
+    give_item: item._id.toString(),
+    for_gold: 10
+  });
+  await tradeCmd.execute(offerInt);
+  const offer = Array.from(tradeCmd.activeTradeOffers.values()).find(o => o.fromDiscordId === sellerId);
+  assert.ok(offer);
+
+  const declineInt = createMockInteraction(buyerId, {}, `trade:decline:${offer.tradeId}`);
+  await tradeCmd.handleTradeButton(declineInt);
+  assert.ok(declineInt.getReply().content.includes('declined'));
+  assert.equal(tradeCmd.activeTradeOffers.has(offer.tradeId), false);
+
+  const untouchedItem = await mongoose.model('Item').findById(item._id);
+  assert.equal(untouchedItem.characterId.toString(), seller._id.toString(), 'Item should stay with seller after decline');
 });
 
 test('Discord Commands Flow — /tutorial chapters', async () => {

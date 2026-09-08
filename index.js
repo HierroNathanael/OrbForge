@@ -7,6 +7,7 @@ import * as forgeCmd from './src/discord/commands/forge.js';
 import * as dungeonCmd from './src/discord/commands/dungeon.js';
 import * as tutorialCmd from './src/discord/commands/tutorial.js';
 import * as inventoryCmd from './src/discord/commands/inventory.js';
+import * as tradeCmd from './src/discord/commands/trade.js';
 
 dotenv.config();
 
@@ -16,7 +17,7 @@ const client = new Client({
 
 client.commands = new Collection();
 
-const commands = [characterCmd, treeCmd, forgeCmd, dungeonCmd, tutorialCmd, inventoryCmd];
+const commands = [characterCmd, treeCmd, forgeCmd, dungeonCmd, tutorialCmd, inventoryCmd, tradeCmd];
 for (const cmd of commands) {
   if (cmd.data && cmd.data.name) {
     client.commands.set(cmd.data.name, cmd);
@@ -58,6 +59,8 @@ client.on(Events.InteractionCreate, async interaction => {
       await dungeonCmd.handleCombatButton(interaction);
     } else if (interaction.customId.startsWith('dungeon:')) {
       await dungeonCmd.handleLobbyButton(interaction);
+    } else if (interaction.customId.startsWith('trade:')) {
+      await tradeCmd.handleTradeButton(interaction);
     } else if (interaction.customId.startsWith('tutorial:') || interaction.customId.startsWith('tutorial_')) {
       await tutorialCmd.handleTutorialButton(interaction);
     }
