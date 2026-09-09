@@ -10,6 +10,8 @@ import * as inventoryCmd from '../src/discord/commands/inventory.js';
 import * as forgeCmd from '../src/discord/commands/forge.js';
 import * as tutorialCmd from '../src/discord/commands/tutorial.js';
 import * as tradeCmd from '../src/discord/commands/trade.js';
+import * as redeemCmd from '../src/discord/commands/redeem.js';
+import { RedeemCode } from '../src/models/RedeemCode.js';
 import { GAME_CONFIG } from '../src/config/constants.js';
 
 let mongoServer;
@@ -352,4 +354,44 @@ test('Discord Commands Flow — /tutorial chapters', async () => {
   const tutBtnInt = createMockInteraction(userId, {}, `tutorial:next:0:${userId}`);
   await tutorialCmd.handleTutorialButton(tutBtnInt);
   assert.ok(tutBtnInt.getReply().isUpdated);
+});
+
+test('Discord Commands Flow — /redeem grants rewards once per character', async () => {
+  const userId = 'redeemer_1';
+
+  await characterCmd.execute(createMockInteraction(userId, { subcommand: 'create', name: 'Redeemer', class: 'Mage' }));
+  const character = await mongoose.model('Character').findOne({ discordId: userId });
+  const goldBefore = character.gold;
+  const orbBefore = character.orbs.orb_of_kindling;
+
+  await RedeemCode.create({
+    code: 'WELCOME10',
+    rewardGold: 50,
+    rewardOrbs: { orb_of_kindling: 2 }
+  });
+
+  const redeemInt = createMockInteraction(userId, { code: 'welcome10' });
+  await redeemCmd.execute(redeemInt);
+  assert.ok(redeemInt.getReply().content.includes('redeemed'));
+
+  const updated = await mongoose.model('Character').findById(character._id);
+  assert.equal(updated.gold, goldBefore + 50);
+  assert.equal(updated.orbs.orb_of_kindling, orbBefore + 2);
+
+  // Redeeming again should be rejected
+  const secondInt = createMockInteraction(userId, { code: 'WELCOME10' });
+  await redeemCmd.execute(secondInt);
+  assert.ok(secondInt.getReply().content.includes('already redeemed'));
+
+  const unchanged = await mongoose.model('Character').findById(character._id);
+  assert.equal(unchanged.gold, goldBefore + 50);
+});
+
+test('Discord Commands Flow — /redeem rejects invalid code', async () => {
+  const userId = 'redeemer_2';
+  await characterCmd.execute(createMockInteraction(userId, { subcommand: 'create', name: 'Redeemer2', class: 'Warrior' }));
+
+  const invalidInt = createMockInteraction(userId, { code: 'NOPE' });
+  await redeemCmd.execute(invalidInt);
+  assert.ok(invalidInt.getReply().content.includes('not a valid code'));
 });
