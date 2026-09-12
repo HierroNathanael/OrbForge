@@ -9,6 +9,7 @@ import * as tutorialCmd from './src/discord/commands/tutorial.js';
 import * as inventoryCmd from './src/discord/commands/inventory.js';
 import * as tradeCmd from './src/discord/commands/trade.js';
 import * as redeemCmd from './src/discord/commands/redeem.js';
+import * as redeemCreateCmd from './src/discord/commands/redeemCreate.js';
 
 dotenv.config();
 
@@ -18,7 +19,7 @@ const client = new Client({
 
 client.commands = new Collection();
 
-const commands = [characterCmd, treeCmd, forgeCmd, dungeonCmd, tutorialCmd, inventoryCmd, tradeCmd, redeemCmd];
+const commands = [characterCmd, treeCmd, forgeCmd, dungeonCmd, tutorialCmd, inventoryCmd, tradeCmd, redeemCmd, redeemCreateCmd];
 for (const cmd of commands) {
   if (cmd.data && cmd.data.name) {
     client.commands.set(cmd.data.name, cmd);
