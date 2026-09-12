@@ -12,6 +12,9 @@ import * as tutorialCmd from '../src/discord/commands/tutorial.js';
 import * as tradeCmd from '../src/discord/commands/trade.js';
 import * as redeemCmd from '../src/discord/commands/redeem.js';
 import { RedeemCode } from '../src/models/RedeemCode.js';
+import { TradeOffer } from '../src/models/TradeOffer.js';
+import { DungeonLobby } from '../src/models/DungeonLobby.js';
+import { clearCooldown } from '../src/discord/utils/cooldown.js';
 import { GAME_CONFIG } from '../src/config/constants.js';
 
 let mongoServer;
@@ -124,13 +127,13 @@ test('Discord Commands Flow — /dungeon enter and combat buttons to victory', a
   assert.equal(enterReply.embeds.length, 1);
   assert.ok(enterReply.components.length > 0);
 
-  const lobby = Array.from(dungeonCmd.activeDungeonLobbies.values())[0];
+  const lobby = await DungeonLobby.findOne({ leaderId: userId });
   assert.ok(lobby);
 
   // 2. Leader starts the dungeon solo
   const startInt = createMockInteraction(userId, {}, `dungeon:start:${lobby.lobbyId}`);
   await dungeonCmd.handleLobbyButton(startInt);
-  assert.equal(dungeonCmd.activeDungeonLobbies.has(lobby.lobbyId), false, 'Lobby should close once started');
+  assert.equal(await DungeonLobby.findOne({ lobbyId: lobby.lobbyId }), null, 'Lobby should close once started');
 
   // Get active battle and character ID
   const activeBattles = Array.from(dungeonCmd.activeDungeonBattles.values());
@@ -164,7 +167,7 @@ test('Discord Commands Flow — /dungeon party join, cap at 3, and leader-only s
   // Leader opens a lobby
   const enterInt = createMockInteraction(leaderId, { subcommand: 'enter', tier: 0 });
   await dungeonCmd.execute(enterInt);
-  const lobby = Array.from(dungeonCmd.activeDungeonLobbies.values()).find(l => l.leaderId === leaderId);
+  const lobby = await DungeonLobby.findOne({ leaderId });
   assert.ok(lobby);
 
   // Non-leader can't start an under-full lobby
@@ -177,18 +180,20 @@ test('Discord Commands Flow — /dungeon party join, cap at 3, and leader-only s
   await dungeonCmd.handleLobbyButton(join1Int);
   const join2Int = createMockInteraction(mate2Id, {}, `dungeon:join:${lobby.lobbyId}`);
   await dungeonCmd.handleLobbyButton(join2Int);
-  assert.equal(lobby.members.length, GAME_CONFIG.PARTY_SIZE_MAX);
+  let lobbyAfterJoins = await DungeonLobby.findOne({ lobbyId: lobby.lobbyId });
+  assert.equal(lobbyAfterJoins.members.length, GAME_CONFIG.PARTY_SIZE_MAX);
 
   // A 4th player is rejected — party is full
   const join3Int = createMockInteraction(mate3Id, {}, `dungeon:join:${lobby.lobbyId}`);
   await dungeonCmd.handleLobbyButton(join3Int);
   assert.ok(join3Int.getReply().content.includes('full'));
-  assert.equal(lobby.members.length, GAME_CONFIG.PARTY_SIZE_MAX);
+  lobbyAfterJoins = await DungeonLobby.findOne({ lobbyId: lobby.lobbyId });
+  assert.equal(lobbyAfterJoins.members.length, GAME_CONFIG.PARTY_SIZE_MAX);
 
   // Leader starts the full party
   const startInt = createMockInteraction(leaderId, {}, `dungeon:start:${lobby.lobbyId}`);
   await dungeonCmd.handleLobbyButton(startInt);
-  assert.equal(dungeonCmd.activeDungeonLobbies.has(lobby.lobbyId), false);
+  assert.equal(await DungeonLobby.findOne({ lobbyId: lobby.lobbyId }), null);
 
   const battle = Array.from(dungeonCmd.activeDungeonBattles.values()).find(b => b.partyState.length === GAME_CONFIG.PARTY_SIZE_MAX);
   assert.ok(battle, 'Battle should launch with all 3 party members');
@@ -284,14 +289,14 @@ test('Discord Commands Flow — /trade offer, accept swaps item + gold both ways
   await tradeCmd.execute(offerInt);
   assert.ok(offerInt.getReply().components.length > 0, 'Offer should render Accept/Decline buttons');
 
-  const offer = Array.from(tradeCmd.activeTradeOffers.values())[0];
+  const offer = await TradeOffer.findOne({ fromDiscordId: sellerId });
   assert.ok(offer);
 
   // Buyer accepts
   const acceptInt = createMockInteraction(buyerId, {}, `trade:accept:${offer.tradeId}`);
   await tradeCmd.handleTradeButton(acceptInt);
   assert.ok(acceptInt.getReply().content.includes('Trade complete'));
-  assert.equal(tradeCmd.activeTradeOffers.has(offer.tradeId), false, 'Offer should clear after accept');
+  assert.equal(await TradeOffer.findOne({ tradeId: offer.tradeId }), null, 'Offer should clear after accept');
 
   const updatedItem = await mongoose.model('Item').findById(item._id);
   assert.equal(updatedItem.characterId.toString(), buyer._id.toString(), 'Item should now belong to buyer');
@@ -328,13 +333,13 @@ test('Discord Commands Flow — /trade decline leaves item and gold untouched', 
     for_gold: 10
   });
   await tradeCmd.execute(offerInt);
-  const offer = Array.from(tradeCmd.activeTradeOffers.values()).find(o => o.fromDiscordId === sellerId);
+  const offer = await TradeOffer.findOne({ fromDiscordId: sellerId });
   assert.ok(offer);
 
   const declineInt = createMockInteraction(buyerId, {}, `trade:decline:${offer.tradeId}`);
   await tradeCmd.handleTradeButton(declineInt);
   assert.ok(declineInt.getReply().content.includes('declined'));
-  assert.equal(tradeCmd.activeTradeOffers.has(offer.tradeId), false);
+  assert.equal(await TradeOffer.findOne({ tradeId: offer.tradeId }), null);
 
   const untouchedItem = await mongoose.model('Item').findById(item._id);
   assert.equal(untouchedItem.characterId.toString(), seller._id.toString(), 'Item should stay with seller after decline');
@@ -378,7 +383,8 @@ test('Discord Commands Flow — /redeem grants rewards once per character', asyn
   assert.equal(updated.gold, goldBefore + 50);
   assert.equal(updated.orbs.orb_of_kindling, orbBefore + 2);
 
-  // Redeeming again should be rejected
+  // Redeeming again should be rejected (bypass the anti-spam cooldown to isolate this check)
+  clearCooldown(`redeem:${userId}`);
   const secondInt = createMockInteraction(userId, { code: 'WELCOME10' });
   await redeemCmd.execute(secondInt);
   assert.ok(secondInt.getReply().content.includes('already redeemed'));

@@ -2,8 +2,8 @@ import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } fro
 import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
 import { Item } from '../../models/Item.js';
-
-export const activeTradeOffers = new Map();
+import { TradeOffer } from '../../models/TradeOffer.js';
+import { checkCooldown } from '../utils/cooldown.js';
 
 export const data = new SlashCommandBuilder()
   .setName('trade')
@@ -40,12 +40,8 @@ async function getActiveCharacter(discordId) {
   return Character.findById(user.activeCharacterId);
 }
 
-function clearStaleOffersFor(discordId) {
-  for (const [id, offer] of activeTradeOffers.entries()) {
-    if (offer.fromDiscordId === discordId || offer.toDiscordId === discordId) {
-      activeTradeOffers.delete(id);
-    }
-  }
+async function clearStaleOffersFor(discordId) {
+  await TradeOffer.deleteMany({ $or: [{ fromDiscordId: discordId }, { toDiscordId: discordId }] });
 }
 
 function tradeSummary(offer) {
@@ -75,6 +71,11 @@ export async function execute(interaction) {
 
   const fromDiscordId = interaction.user.id;
   const targetUser = interaction.options.getUser('target');
+
+  const cooldown = checkCooldown(`trade:${fromDiscordId}`, 30);
+  if (cooldown.onCooldown) {
+    return interaction.reply({ content: `⏳ Wait ${cooldown.remainingSeconds}s before offering another trade.`, ephemeral: true });
+  }
 
   if (targetUser.id === fromDiscordId) {
     return interaction.reply({ content: '❌ You cannot trade with yourself.', ephemeral: true });
@@ -127,10 +128,10 @@ export async function execute(interaction) {
     return interaction.reply({ content: `❌ You only have ${fromCharacter.gold} gold.`, ephemeral: true });
   }
 
-  clearStaleOffersFor(fromDiscordId);
+  await clearStaleOffersFor(fromDiscordId);
 
   const tradeId = `trade_${fromCharacter._id}_${Date.now()}`;
-  const offer = {
+  const offer = await TradeOffer.create({
     tradeId,
     fromDiscordId,
     fromCharacterId: fromCharacter._id,
@@ -144,8 +145,7 @@ export async function execute(interaction) {
     forItemId: forItem ? forItem._id.toString() : null,
     forItemName: forItem ? forItem.name : null,
     forGold
-  };
-  activeTradeOffers.set(tradeId, offer);
+  });
 
   return interaction.reply({
     content: `🤝 **Trade Offer** — <@${targetUser.id}>, review below!\n${tradeSummary(offer)}`,
@@ -155,7 +155,7 @@ export async function execute(interaction) {
 
 export async function handleTradeButton(interaction) {
   const [, action, tradeId] = interaction.customId.split(':');
-  const offer = activeTradeOffers.get(tradeId);
+  const offer = await TradeOffer.findOne({ tradeId });
 
   if (!offer) {
     return interaction.reply({ content: '⚠️ This trade offer has expired or was already resolved.', ephemeral: true });
@@ -165,7 +165,7 @@ export async function handleTradeButton(interaction) {
     if (interaction.user.id !== offer.fromDiscordId && interaction.user.id !== offer.toDiscordId) {
       return interaction.reply({ content: '❌ This is not your trade to decline.', ephemeral: true });
     }
-    activeTradeOffers.delete(tradeId);
+    await TradeOffer.deleteOne({ tradeId });
     return interaction.update({ content: `❌ Trade between **${offer.fromName}** and **${offer.toName}** was declined.`, components: [] });
   }
 
@@ -174,7 +174,7 @@ export async function handleTradeButton(interaction) {
       return interaction.reply({ content: '❌ Only the trade recipient can accept.', ephemeral: true });
     }
 
-    activeTradeOffers.delete(tradeId);
+    await TradeOffer.deleteOne({ tradeId });
 
     // Re-validate everything against fresh state — items/gold may have moved
     // in the time between the offer and this accept click.

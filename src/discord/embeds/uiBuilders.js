@@ -328,3 +328,45 @@ export function createCombatActionButtons(partyState, enemyList = []) {
 
   return livingParty.map(createPartyMemberRow);
 }
+
+export const INVENTORY_PAGE_SIZE = 10;
+
+export function buildInventoryEmbed(character, items, page) {
+  const equipped = items.filter(i => i.isEquipped);
+  const unequipped = items.filter(i => !i.isEquipped);
+
+  const totalPages = Math.max(1, Math.ceil(unequipped.length / INVENTORY_PAGE_SIZE));
+  const pageItems = unequipped.slice(page * INVENTORY_PAGE_SIZE, (page + 1) * INVENTORY_PAGE_SIZE);
+
+  const equippedText = equipped.length > 0
+    ? equipped.map(i => `🛡️ **[${i.type.toUpperCase()}]** ${i.name} [${i.rarity}] — \`ID: ${i._id}\``).join('\n')
+    : '*No gear currently equipped.*';
+
+  const unequippedText = pageItems.length > 0
+    ? pageItems.map(i => `📦 **[${i.type.toUpperCase()}]** ${i.name} [${i.rarity}] — \`ID: ${i._id}\``).join('\n')
+    : '*No unequipped items.*';
+
+  return new EmbedBuilder()
+    .setTitle(`🎒 Inventory — ${character.name} (Level ${character.level} ${character.className})`)
+    .setColor('#3498db')
+    .addFields(
+      { name: '⚔️ Currently Equipped Gear', value: equippedText, inline: false },
+      { name: `📦 Bag Items (Page ${page + 1}/${totalPages})`, value: unequippedText, inline: false }
+    )
+    .setFooter({ text: 'Use /inventory equip item_id:<ID> or /forge orb:<type> item_id:<ID>' });
+}
+
+export function buildInventoryNavRow(page, totalPages, userId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`inventory:page:${page - 1}:${userId}`)
+      .setLabel('◀ Prev')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page <= 0),
+    new ButtonBuilder()
+      .setCustomId(`inventory:page:${page + 1}:${userId}`)
+      .setLabel('Next ▶')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(page >= totalPages - 1)
+  );
+}

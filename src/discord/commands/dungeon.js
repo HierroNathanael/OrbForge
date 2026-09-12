@@ -2,6 +2,7 @@ import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
 import { Item } from '../../models/Item.js';
+import { DungeonLobby } from '../../models/DungeonLobby.js';
 import { generateMapTicket, generateEncounterMonsters } from '../../game/maps/mapEngine.js';
 import { calculateEffectiveStats, resolveCombatRound, generatePersonalInstancedLoot } from '../../game/combat/combatEngine.js';
 import { createCombatEmbed, createCombatActionButtons, createLobbyEmbed, createLobbyButtons } from '../embeds/uiBuilders.js';
@@ -9,20 +10,28 @@ import { accumulateTreeStats } from '../../game/skillTree/treeEngine.js';
 import { resolveLevelUps, GAME_CONFIG } from '../../config/constants.js';
 
 export const activeDungeonBattles = new Map();
-export const activeDungeonLobbies = new Map();
 
-function clearStaleEntriesForCharacter(characterId) {
+async function clearStaleEntriesForCharacter(characterId) {
   const idStr = characterId.toString();
-  for (const [id, lobby] of activeDungeonLobbies.entries()) {
-    if (lobby.members.some(m => m.character._id.toString() === idStr)) {
-      activeDungeonLobbies.delete(id);
-    }
-  }
+  await DungeonLobby.deleteMany({ 'members.characterId': characterId });
   for (const [id, state] of activeDungeonBattles.entries()) {
     if (state.partyState.some(m => m.character._id.toString() === idStr)) {
       activeDungeonBattles.delete(id);
     }
   }
+}
+
+// Rehydrates a stored lobby doc's member characterIds into full Character docs
+// so createLobbyEmbed/createLobbyButtons and buildPartyState can render/use them.
+async function hydrateLobby(lobbyDoc) {
+  const characters = await Character.find({ _id: { $in: lobbyDoc.members.map(m => m.characterId) } });
+  const charById = new Map(characters.map(c => [c._id.toString(), c]));
+  return {
+    lobbyId: lobbyDoc.lobbyId,
+    tier: lobbyDoc.tier,
+    leaderId: lobbyDoc.leaderId,
+    members: lobbyDoc.members.map(m => ({ discordId: m.discordId, character: charById.get(m.characterId.toString()) }))
+  };
 }
 
 async function buildPartyState(members) {
@@ -80,16 +89,16 @@ export async function execute(interaction) {
 
   // Subcommand === 'enter' — open a party lobby. Leader clicks Start to launch
   // the encounter immediately (solo) or once teammates have joined (party).
-  clearStaleEntriesForCharacter(character._id);
+  await clearStaleEntriesForCharacter(character._id);
 
   const lobbyId = `lobby_${character._id}_${Date.now()}`;
-  const lobby = {
+  await DungeonLobby.create({
     lobbyId,
     tier,
     leaderId: discordId,
-    members: [{ discordId, character }]
-  };
-  activeDungeonLobbies.set(lobbyId, lobby);
+    members: [{ discordId, characterId: character._id }]
+  });
+  const lobby = { lobbyId, tier, leaderId: discordId, members: [{ discordId, character }] };
 
   return interaction.reply({
     embeds: [createLobbyEmbed(lobby)],
@@ -99,9 +108,9 @@ export async function execute(interaction) {
 
 export async function handleLobbyButton(interaction) {
   const [, action, lobbyId] = interaction.customId.split(':');
-  const lobby = activeDungeonLobbies.get(lobbyId);
+  const lobbyDoc = await DungeonLobby.findOne({ lobbyId });
 
-  if (!lobby) {
+  if (!lobbyDoc) {
     return interaction.reply({
       content: '⚠️ This party lobby has expired or already started. Use `/dungeon enter` to start a new one!',
       ephemeral: true
@@ -109,10 +118,10 @@ export async function handleLobbyButton(interaction) {
   }
 
   if (action === 'join') {
-    if (lobby.members.some(m => m.discordId === interaction.user.id)) {
+    if (lobbyDoc.members.some(m => m.discordId === interaction.user.id)) {
       return interaction.reply({ content: '❌ You are already in this party.', ephemeral: true });
     }
-    if (lobby.members.length >= GAME_CONFIG.PARTY_SIZE_MAX) {
+    if (lobbyDoc.members.length >= GAME_CONFIG.PARTY_SIZE_MAX) {
       return interaction.reply({ content: `❌ Party is full (max ${GAME_CONFIG.PARTY_SIZE_MAX}).`, ephemeral: true });
     }
 
@@ -125,8 +134,10 @@ export async function handleLobbyButton(interaction) {
       return interaction.reply({ content: '❌ Active character not found. Create one with `/character create`!', ephemeral: true });
     }
 
-    lobby.members.push({ discordId: interaction.user.id, character: joinCharacter });
+    lobbyDoc.members.push({ discordId: interaction.user.id, characterId: joinCharacter._id });
+    await lobbyDoc.save();
 
+    const lobby = await hydrateLobby(lobbyDoc);
     return interaction.update({
       embeds: [createLobbyEmbed(lobby)],
       components: createLobbyButtons(lobby)
@@ -134,12 +145,13 @@ export async function handleLobbyButton(interaction) {
   }
 
   if (action === 'start') {
-    if (interaction.user.id !== lobby.leaderId) {
+    if (interaction.user.id !== lobbyDoc.leaderId) {
       return interaction.reply({ content: '❌ Only the party leader can start the dungeon.', ephemeral: true });
     }
 
-    activeDungeonLobbies.delete(lobbyId);
-    for (const member of lobby.members) clearStaleEntriesForCharacter(member.character._id);
+    const lobby = await hydrateLobby(lobbyDoc);
+    await DungeonLobby.deleteOne({ lobbyId });
+    for (const member of lobby.members) await clearStaleEntriesForCharacter(member.character._id);
 
     const partyState = await buildPartyState(lobby.members);
     const mapTicket = generateMapTicket(lobby.tier);

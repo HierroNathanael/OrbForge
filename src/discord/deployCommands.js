@@ -9,6 +9,7 @@ import { data as inventoryCmd } from './commands/inventory.js';
 import { data as tradeCmd } from './commands/trade.js';
 import { data as redeemCmd } from './commands/redeem.js';
 import { data as redeemCreateCmd } from './commands/redeemCreate.js';
+import { data as helpCmd } from './commands/help.js';
 
 dotenv.config();
 
@@ -21,7 +22,8 @@ const commands = [
   inventoryCmd.toJSON(),
   tradeCmd.toJSON(),
   redeemCmd.toJSON(),
-  redeemCreateCmd.toJSON()
+  redeemCreateCmd.toJSON(),
+  helpCmd.toJSON()
 ];
 
 export async function deploySlashCommands() {

@@ -1,8 +1,8 @@
-import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
+import { SlashCommandBuilder } from 'discord.js';
 import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
 import { Item } from '../../models/Item.js';
-import { createItemTooltip } from '../embeds/uiBuilders.js';
+import { createItemTooltip, buildInventoryEmbed, buildInventoryNavRow, INVENTORY_PAGE_SIZE } from '../embeds/uiBuilders.js';
 
 export const data = new SlashCommandBuilder()
   .setName('inventory')
@@ -49,33 +49,18 @@ export async function execute(interaction) {
   if (subcommand === 'view') {
     const items = await Item.find({ characterId: character._id });
     if (items.length === 0) {
-      return interaction.reply({ 
-        content: `🎒 **${character.name}'s Inventory is empty!**\nRun \`/dungeon enter\` to battle monsters and find your first gear and Orbs!`, 
-        ephemeral: true 
+      return interaction.reply({
+        content: `🎒 **${character.name}'s Inventory is empty!**\nRun \`/dungeon enter\` to battle monsters and find your first gear and Orbs!`,
+        ephemeral: true
       });
     }
 
-    const equipped = items.filter(i => i.isEquipped);
-    const unequipped = items.filter(i => !i.isEquipped);
+    const embed = buildInventoryEmbed(character, items, 0);
+    const unequippedCount = items.filter(i => !i.isEquipped).length;
+    const totalPages = Math.max(1, Math.ceil(unequippedCount / INVENTORY_PAGE_SIZE));
+    const components = totalPages > 1 ? [buildInventoryNavRow(0, totalPages, discordId)] : [];
 
-    const equippedText = equipped.length > 0 
-      ? equipped.map(i => `🛡️ **[${i.type.toUpperCase()}]** ${i.name} [${i.rarity}] — \`ID: ${i._id}\``).join('\n')
-      : '*No gear currently equipped.*';
-
-    const unequippedText = unequipped.length > 0
-      ? unequipped.map(i => `📦 **[${i.type.toUpperCase()}]** ${i.name} [${i.rarity}] — \`ID: ${i._id}\``).join('\n')
-      : '*No unequipped items.*';
-
-    const embed = new EmbedBuilder()
-      .setTitle(`🎒 Inventory — ${character.name} (Level ${character.level} ${character.className})`)
-      .setColor('#3498db')
-      .addFields(
-        { name: '⚔️ Currently Equipped Gear', value: equippedText, inline: false },
-        { name: '📦 Bag Items (Use ID to /forge or /inventory equip)', value: unequippedText, inline: false }
-      )
-      .setFooter({ text: 'Use /inventory equip item_id:<ID> or /forge orb:<type> item_id:<ID>' });
-
-    return interaction.reply({ embeds: [embed] });
+    return interaction.reply({ embeds: [embed], components });
   }
 
   if (subcommand === 'inspect') {
@@ -130,8 +115,29 @@ export async function execute(interaction) {
     item.slot = null;
     await item.save();
 
-    return interaction.reply({ 
-      content: `📦 Unequipped **${item.name}** back to your inventory bag.` 
+    return interaction.reply({
+      content: `📦 Unequipped **${item.name}** back to your inventory bag.`
     });
   }
+}
+
+export async function handleInventoryButton(interaction) {
+  const [, , pageStr, ownerId] = interaction.customId.split(':');
+
+  if (interaction.user.id !== ownerId) {
+    return interaction.reply({ content: '❌ This inventory view belongs to someone else. Run `/inventory view` for your own!', ephemeral: true });
+  }
+
+  const user = await User.findOne({ discordId: ownerId });
+  const character = await Character.findById(user.activeCharacterId);
+  const items = await Item.find({ characterId: character._id });
+
+  const unequippedCount = items.filter(i => !i.isEquipped).length;
+  const totalPages = Math.max(1, Math.ceil(unequippedCount / INVENTORY_PAGE_SIZE));
+  const page = Math.max(0, Math.min(parseInt(pageStr, 10), totalPages - 1));
+
+  const embed = buildInventoryEmbed(character, items, page);
+  const components = totalPages > 1 ? [buildInventoryNavRow(page, totalPages, ownerId)] : [];
+
+  return interaction.update({ embeds: [embed], components });
 }

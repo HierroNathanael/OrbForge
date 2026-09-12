@@ -10,6 +10,7 @@ import * as inventoryCmd from './src/discord/commands/inventory.js';
 import * as tradeCmd from './src/discord/commands/trade.js';
 import * as redeemCmd from './src/discord/commands/redeem.js';
 import * as redeemCreateCmd from './src/discord/commands/redeemCreate.js';
+import * as helpCmd from './src/discord/commands/help.js';
 
 dotenv.config();
 
@@ -19,7 +20,7 @@ const client = new Client({
 
 client.commands = new Collection();
 
-const commands = [characterCmd, treeCmd, forgeCmd, dungeonCmd, tutorialCmd, inventoryCmd, tradeCmd, redeemCmd, redeemCreateCmd];
+const commands = [characterCmd, treeCmd, forgeCmd, dungeonCmd, tutorialCmd, inventoryCmd, tradeCmd, redeemCmd, redeemCreateCmd, helpCmd];
 for (const cmd of commands) {
   if (cmd.data && cmd.data.name) {
     client.commands.set(cmd.data.name, cmd);
@@ -65,6 +66,8 @@ client.on(Events.InteractionCreate, async interaction => {
       await tradeCmd.handleTradeButton(interaction);
     } else if (interaction.customId.startsWith('tutorial:') || interaction.customId.startsWith('tutorial_')) {
       await tutorialCmd.handleTutorialButton(interaction);
+    } else if (interaction.customId.startsWith('inventory:')) {
+      await inventoryCmd.handleInventoryButton(interaction);
     }
   }
 });

@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
 import { RedeemCode } from '../../models/RedeemCode.js';
+import { checkCooldown } from '../utils/cooldown.js';
 
 export const data = new SlashCommandBuilder()
   .setName('redeem')
@@ -22,6 +23,12 @@ function rewardSummary(redeemCode) {
 
 export async function execute(interaction) {
   const discordId = interaction.user.id;
+
+  const cooldown = checkCooldown(`redeem:${discordId}`, 10);
+  if (cooldown.onCooldown) {
+    return interaction.reply({ content: `⏳ Wait ${cooldown.remainingSeconds}s before trying another code.`, ephemeral: true });
+  }
+
   const rawCode = interaction.options.getString('code');
   const code = rawCode.trim().toUpperCase();
 
