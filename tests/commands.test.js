@@ -151,6 +151,35 @@ test('Discord Commands Flow — /dungeon enter and combat buttons to victory', a
 
   // Dungeon should finish in victory and award gear/orbs
   assert.equal(dungeonCmd.activeDungeonBattles.has(battle.battleId), false, 'Battle should finish and clear from active state');
+
+  // Regression: once the battle has actually resolved, the "busy" guard must
+  // release — re-entry should succeed again, not stay blocked forever.
+  const reEnterInt = createMockInteraction(userId, { subcommand: 'enter', tier: 0 });
+  await dungeonCmd.execute(reEnterInt);
+  const reEnterReply = reEnterInt.getReply();
+  assert.ok(!(reEnterReply.content || '').includes('already in an active dungeon battle'));
+  assert.equal(reEnterReply.embeds.length, 1, 'A fresh lobby should open once the prior battle is resolved');
+});
+
+test('Discord Commands Flow — a pending (not-yet-started) lobby is still freely replaceable', async () => {
+  const userId = 'dungeon_replacer';
+  await characterCmd.execute(createMockInteraction(userId, { subcommand: 'create', name: 'Replacer', class: 'Mage' }));
+
+  const firstEnterInt = createMockInteraction(userId, { subcommand: 'enter', tier: 0 });
+  await dungeonCmd.execute(firstEnterInt);
+  const firstLobby = await DungeonLobby.findOne({ leaderId: userId });
+  assert.ok(firstLobby);
+
+  // Never started — opening another lobby should just replace it, not be blocked.
+  const secondEnterInt = createMockInteraction(userId, { subcommand: 'enter', tier: 0 });
+  await dungeonCmd.execute(secondEnterInt);
+  const secondReply = secondEnterInt.getReply();
+  assert.ok(!(secondReply.content || '').includes('already in an active dungeon battle'));
+  assert.equal(secondReply.embeds.length, 1);
+
+  const lobbiesForUser = await DungeonLobby.find({ leaderId: userId });
+  assert.equal(lobbiesForUser.length, 1, 'Old pending lobby should be replaced, not duplicated');
+  assert.notEqual(lobbiesForUser[0].lobbyId, firstLobby.lobbyId);
 });
 
 test('Discord Commands Flow — cannot enter or join a new dungeon while already in an active battle', async () => {
