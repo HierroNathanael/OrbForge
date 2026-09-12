@@ -153,6 +153,37 @@ test('Discord Commands Flow — /dungeon enter and combat buttons to victory', a
   assert.equal(dungeonCmd.activeDungeonBattles.has(battle.battleId), false, 'Battle should finish and clear from active state');
 });
 
+test('Discord Commands Flow — cannot enter or join a new dungeon while already in an active battle', async () => {
+  const userId = 'dungeon_hopper';
+  const mateId = 'dungeon_hopper_mate';
+
+  await characterCmd.execute(createMockInteraction(userId, { subcommand: 'create', name: 'Hopper', class: 'Warrior' }));
+  await characterCmd.execute(createMockInteraction(mateId, { subcommand: 'create', name: 'Mate', class: 'Ranger' }));
+
+  // Open and start a solo battle — it stays active (no combat action taken yet).
+  const enterInt = createMockInteraction(userId, { subcommand: 'enter', tier: 0 });
+  await dungeonCmd.execute(enterInt);
+  const lobby = await DungeonLobby.findOne({ leaderId: userId });
+  const startInt = createMockInteraction(userId, {}, `dungeon:start:${lobby.lobbyId}`);
+  await dungeonCmd.handleLobbyButton(startInt);
+  assert.equal(dungeonCmd.activeDungeonBattles.size > 0, true);
+  const activeBattleCountBefore = dungeonCmd.activeDungeonBattles.size;
+
+  // Re-entering while that battle is unresolved must be rejected, not silently abandon it.
+  const secondEnterInt = createMockInteraction(userId, { subcommand: 'enter', tier: 0 });
+  await dungeonCmd.execute(secondEnterInt);
+  assert.ok(secondEnterInt.getReply().content.includes('already in an active dungeon battle'));
+  assert.equal(dungeonCmd.activeDungeonBattles.size, activeBattleCountBefore, 'Original battle must still be active');
+
+  // A busy character also can't join someone else's lobby.
+  const mateEnterInt = createMockInteraction(mateId, { subcommand: 'enter', tier: 0 });
+  await dungeonCmd.execute(mateEnterInt);
+  const mateLobby = await DungeonLobby.findOne({ leaderId: mateId });
+  const joinInt = createMockInteraction(userId, {}, `dungeon:join:${mateLobby.lobbyId}`);
+  await dungeonCmd.handleLobbyButton(joinInt);
+  assert.ok(joinInt.getReply().content.includes('already in an active dungeon battle'));
+});
+
 test('Discord Commands Flow — /dungeon party join, cap at 3, and leader-only start', async () => {
   const leaderId = 'party_leader';
   const mate1Id = 'party_mate_1';

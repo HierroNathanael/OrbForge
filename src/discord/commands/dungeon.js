@@ -11,14 +11,19 @@ import { resolveLevelUps, GAME_CONFIG } from '../../config/constants.js';
 
 export const activeDungeonBattles = new Map();
 
-async function clearStaleEntriesForCharacter(characterId) {
-  const idStr = characterId.toString();
+// Only clears pending lobby invites, never an in-progress battle — a battle
+// must finish (victory/defeat) before its Map entry goes away, so a character
+// can't silently abandon one mid-fight by opening/joining another.
+async function clearStaleLobbiesForCharacter(characterId) {
   await DungeonLobby.deleteMany({ 'members.characterId': characterId });
-  for (const [id, state] of activeDungeonBattles.entries()) {
-    if (state.partyState.some(m => m.character._id.toString() === idStr)) {
-      activeDungeonBattles.delete(id);
-    }
+}
+
+function findActiveBattleForCharacter(characterId) {
+  const idStr = characterId.toString();
+  for (const state of activeDungeonBattles.values()) {
+    if (state.partyState.some(m => m.character._id.toString() === idStr)) return state;
   }
+  return null;
 }
 
 // Rehydrates a stored lobby doc's member characterIds into full Character docs
@@ -87,9 +92,13 @@ export async function execute(interaction) {
   // Default to Tier 0 (Tutorial) if character level <= 2, otherwise Tier 1
   const tier = selectedTier !== null ? selectedTier : (character.level <= 2 ? 0 : 1);
 
+  if (findActiveBattleForCharacter(character._id)) {
+    return interaction.reply({ content: '❌ You are already in an active dungeon battle! Finish it before starting another.', ephemeral: true });
+  }
+
   // Subcommand === 'enter' — open a party lobby. Leader clicks Start to launch
   // the encounter immediately (solo) or once teammates have joined (party).
-  await clearStaleEntriesForCharacter(character._id);
+  await clearStaleLobbiesForCharacter(character._id);
 
   const lobbyId = `lobby_${character._id}_${Date.now()}`;
   await DungeonLobby.create({
@@ -133,6 +142,9 @@ export async function handleLobbyButton(interaction) {
     if (!joinCharacter) {
       return interaction.reply({ content: '❌ Active character not found. Create one with `/character create`!', ephemeral: true });
     }
+    if (findActiveBattleForCharacter(joinCharacter._id)) {
+      return interaction.reply({ content: '❌ You are already in an active dungeon battle! Finish it before joining another.', ephemeral: true });
+    }
 
     lobbyDoc.members.push({ discordId: interaction.user.id, characterId: joinCharacter._id });
     await lobbyDoc.save();
@@ -150,8 +162,14 @@ export async function handleLobbyButton(interaction) {
     }
 
     const lobby = await hydrateLobby(lobbyDoc);
+
+    const busyMember = lobby.members.find(m => findActiveBattleForCharacter(m.character._id));
+    if (busyMember) {
+      return interaction.reply({ content: `❌ **${busyMember.character.name}** is already in another active dungeon battle. They must finish it first.`, ephemeral: true });
+    }
+
     await DungeonLobby.deleteOne({ lobbyId });
-    for (const member of lobby.members) await clearStaleEntriesForCharacter(member.character._id);
+    for (const member of lobby.members) await clearStaleLobbiesForCharacter(member.character._id);
 
     const partyState = await buildPartyState(lobby.members);
     const mapTicket = generateMapTicket(lobby.tier);

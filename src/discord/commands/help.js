@@ -7,11 +7,10 @@ import { data as tutorialCmd } from './tutorial.js';
 import { data as inventoryCmd } from './inventory.js';
 import { data as tradeCmd } from './trade.js';
 import { data as redeemCmd } from './redeem.js';
-import { data as redeemCreateCmd } from './redeemCreate.js';
 
 const allCommands = [
   characterCmd, treeCmd, forgeCmd, dungeonCmd, tutorialCmd,
-  inventoryCmd, tradeCmd, redeemCmd, redeemCreateCmd
+  inventoryCmd, tradeCmd, redeemCmd
 ];
 
 export const data = new SlashCommandBuilder()
