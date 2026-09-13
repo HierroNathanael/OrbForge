@@ -56,6 +56,8 @@ client.on(Events.InteractionCreate, async interaction => {
   } else if (interaction.isStringSelectMenu()) {
     if (interaction.customId === 'tree_allocate_select') {
       await treeCmd.handleTreeSelectMenu(interaction);
+    } else if (interaction.customId === 'ascendancy_allocate_select') {
+      await treeCmd.handleAscendancySelectMenu(interaction);
     }
   } else if (interaction.isButton()) {
     if (interaction.customId.startsWith('combat:') || interaction.customId.startsWith('combat_')) {

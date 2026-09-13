@@ -73,34 +73,6 @@ export const SKILL_TREE_DATA = {
         { stat: 'lifesteal', value: 0.07, label: '+7% Lifesteal' },
         { stat: 'lifesteal', value: 0.12, label: '+12% Lifesteal' }
       ]
-    },
-    // Subclass nodes: Berserker
-    {
-      id: 'war_asc_berserker_rage',
-      name: 'Savage Rage',
-      tier: 'subclass',
-      subclassName: 'Berserker',
-      maxRank: 3,
-      prerequisites: ['war_keystone_bloodthirst'],
-      effects: [
-        { stat: 'damage_percent', value: 0.12, label: '+12% Attack Damage' },
-        { stat: 'damage_percent', value: 0.25, label: '+25% Attack Damage' },
-        { stat: 'damage_percent', value: 0.40, label: '+40% Attack Damage' }
-      ]
-    },
-    // Subclass nodes: Guardian
-    {
-      id: 'war_asc_guardian_aegis',
-      name: 'Divine Aegis',
-      tier: 'subclass',
-      subclassName: 'Guardian',
-      maxRank: 3,
-      prerequisites: ['war_keystone_unyielding'],
-      effects: [
-        { stat: 'block_chance', value: 0.05, label: '+5% Block Chance' },
-        { stat: 'block_chance', value: 0.10, label: '+10% Block Chance' },
-        { stat: 'block_chance', value: 0.18, label: '+18% Block Chance' }
-      ]
     }
   ],
   Ranger: [
@@ -151,32 +123,6 @@ export const SKILL_TREE_DATA = {
         { stat: 'crit_multiplier', value: 0.30, label: '+30% Crit Damage' },
         { stat: 'crit_multiplier', value: 0.50, label: '+50% Crit Damage' }
       ]
-    },
-    {
-      id: 'rng_asc_sharpshooter_pierce',
-      name: 'Heartseeker',
-      tier: 'subclass',
-      subclassName: 'Sharpshooter',
-      maxRank: 3,
-      prerequisites: ['rng_keystone_sniper'],
-      effects: [
-        { stat: 'flat_damage', value: 12, label: '+12 Damage' },
-        { stat: 'flat_damage', value: 28, label: '+28 Damage' },
-        { stat: 'flat_damage', value: 50, label: '+50 Damage' }
-      ]
-    },
-    {
-      id: 'rng_asc_trapper_snare',
-      name: 'Entangling Wire',
-      tier: 'subclass',
-      subclassName: 'Trapper',
-      maxRank: 3,
-      prerequisites: ['rng_evasion_1'],
-      effects: [
-        { stat: 'evasion_percent', value: 0.10, label: '+10% Evasion' },
-        { stat: 'evasion_percent', value: 0.22, label: '+22% Evasion' },
-        { stat: 'evasion_percent', value: 0.35, label: '+35% Evasion' }
-      ]
     }
   ],
   Mage: [
@@ -226,32 +172,6 @@ export const SKILL_TREE_DATA = {
         { stat: 'elemental_damage_percent', value: 0.10, label: '+10% Spell Damage' },
         { stat: 'elemental_damage_percent', value: 0.25, label: '+25% Spell Damage' },
         { stat: 'elemental_damage_percent', value: 0.45, label: '+45% Spell Damage' }
-      ]
-    },
-    {
-      id: 'mag_asc_elementalist_cataclysm',
-      name: 'Primeval Power',
-      tier: 'subclass',
-      subclassName: 'Elementalist',
-      maxRank: 3,
-      prerequisites: ['mag_keystone_overload'],
-      effects: [
-        { stat: 'spell_crit', value: 0.05, label: '+5% Spell Crit' },
-        { stat: 'spell_crit', value: 0.12, label: '+12% Spell Crit' },
-        { stat: 'spell_crit', value: 0.20, label: '+20% Spell Crit' }
-      ]
-    },
-    {
-      id: 'mag_asc_battlemage_barrier',
-      name: 'Arcane Fortress',
-      tier: 'subclass',
-      subclassName: 'Battle Mage',
-      maxRank: 3,
-      prerequisites: ['mag_shield_1'],
-      effects: [
-        { stat: 'heal_power_percent', value: 0.10, label: '+10% Shield & Heal Power' },
-        { stat: 'heal_power_percent', value: 0.22, label: '+22% Shield & Heal Power' },
-        { stat: 'heal_power_percent', value: 0.35, label: '+35% Shield & Heal Power' }
       ]
     }
   ]

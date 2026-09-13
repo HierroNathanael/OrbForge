@@ -84,37 +84,11 @@ test('Skill Tree — Small to Keystone phase gate blocks allocation below thresh
   assert.equal(res.newRank, 1);
 });
 
-test('Skill Tree — Keystone to Subclass phase gate is independent of the subclass-name check', () => {
-  const character = {
-    className: 'Warrior',
-    subclassName: 'Berserker',
-    gold: 0,
-    orbs: {},
-    skillPoints: { available: 10, spent: 0 },
-    passiveTree: new Map([['war_str_1', 3], ['war_hp_1', 3], ['war_dmg_1', 1], ['war_keystone_bloodthirst', 1]])
-  };
-
-  // Right subclass, gate unmet (keystone points = 1 < 2)
-  assert.throws(() => {
-    allocateNodePoint(character, 'war_asc_berserker_rage');
-  }, /Requires \d+ points spent in Keystone/);
-
-  allocateNodePoint(character, 'war_keystone_bloodthirst'); // keystone = 2, gate met
-
-  // Wrong subclass, gate met -> still fails (subclass-name check runs first)
-  assert.throws(() => {
-    allocateNodePoint(character, 'war_asc_guardian_aegis');
-  }, /Must have subclass/);
-
-  // Right subclass, gate met -> succeeds
-  const res = allocateNodePoint(character, 'war_asc_berserker_rage');
-  assert.equal(res.newRank, 1);
-});
-
 test('Skill Tree — ascendSubclass happy path', () => {
   const character = {
     className: 'Warrior',
     subclassName: null,
+    level: 20,
     gold: 500,
     orbs: { orb_of_fate: 0 },
     skillPoints: { available: 0, spent: 0 },
@@ -132,6 +106,7 @@ test('Skill Tree — ascendSubclass rejects before gate met', () => {
   const character = {
     className: 'Warrior',
     subclassName: null,
+    level: 20,
     skillPoints: { available: 0, spent: 0 },
     passiveTree: new Map([['war_keystone_bloodthirst', 1]])
   };
@@ -139,6 +114,30 @@ test('Skill Tree — ascendSubclass rejects before gate met', () => {
   assert.throws(() => {
     ascendSubclass(character, 'Berserker');
   }, /Requires \d+ points spent in Keystone/);
+});
+
+test('Skill Tree — ascendSubclass rejects below minimum level', () => {
+  const belowLevel = {
+    className: 'Warrior',
+    subclassName: null,
+    level: 5,
+    skillPoints: { available: 0, spent: 0 },
+    passiveTree: new Map([['war_keystone_bloodthirst', 2]])
+  };
+  assert.throws(() => {
+    ascendSubclass(belowLevel, 'Berserker');
+  }, /Requires Level \d+ to Ascend/);
+
+  // No `level` field at all defaults to 1, same as the schema — not exempt.
+  const noLevelField = {
+    className: 'Warrior',
+    subclassName: null,
+    skillPoints: { available: 0, spent: 0 },
+    passiveTree: new Map([['war_keystone_bloodthirst', 2]])
+  };
+  assert.throws(() => {
+    ascendSubclass(noLevelField, 'Berserker');
+  }, /Requires Level \d+ to Ascend/);
 });
 
 test('Skill Tree — ascendSubclass rejects re-ascend', () => {
@@ -158,6 +157,7 @@ test('Skill Tree — ascendSubclass rejects invalid subclass for class (key/name
   const character = {
     className: 'Mage',
     subclassName: null,
+    level: 20,
     skillPoints: { available: 0, spent: 0 },
     passiveTree: new Map([['mag_keystone_overload', 2]])
   };

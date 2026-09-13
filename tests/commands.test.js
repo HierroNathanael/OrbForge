@@ -117,13 +117,14 @@ test('Discord Commands Flow — /tree view, allocate, respec', async () => {
   assert.ok(respecInt.getReply().content.includes('Successfully respecced'));
 });
 
-test('Discord Commands Flow — /tree phase gate, ascend, and subclass respec via Orb of Fate', async () => {
+test('Discord Commands Flow — /tree phase gate, ascend grants Ascendancy Points, /tree ascendancy allocates them', async () => {
   const userId = 'tree_ascender';
   await characterCmd.execute(createMockInteraction(userId, { subcommand: 'create', name: 'Ascender', class: 'Warrior' }));
 
   const CharacterModel = mongoose.model('Character');
   let character = await CharacterModel.findOne({ discordId: userId });
   character.skillPoints.available = 20;
+  character.level = 20;
   await character.save();
 
   const allocate = async (nodeId) => {
@@ -163,22 +164,22 @@ test('Discord Commands Flow — /tree phase gate, ascend, and subclass respec vi
 
   character = await CharacterModel.findById(character._id);
   assert.equal(character.subclassName, 'Berserker');
+  assert.equal(character.ascendPoints.available, 2, 'Ascending at level 20 should immediately grant the level-20 milestone');
 
-  // Subclass node now allocatable.
-  const subclassReply = await allocate('war_asc_berserker_rage');
-  assert.ok(subclassReply.content.includes('Successfully allocated'));
+  // /tree ascendancy shows the mini-tree and lets us spend Ascendancy Points.
+  const ascendancyViewInt = createMockInteraction(userId, { subcommand: 'ascendancy' });
+  await treeCmd.execute(ascendancyViewInt);
+  const ascendancyViewReply = ascendancyViewInt.getReply();
+  assert.equal(ascendancyViewReply.embeds.length, 1);
+  assert.ok(ascendancyViewReply.components.length > 0);
 
-  // Subclass-node respec now costs Orb of Fate, not Orb of Unmaking.
+  const ascendancySelectInt = createMockInteraction(userId, { values: ['asc_war_berserker_small_1'] }, 'ascendancy_allocate_select');
+  await treeCmd.handleAscendancySelectMenu(ascendancySelectInt);
+  assert.ok(ascendancySelectInt.getReply().content.includes('Successfully allocated'));
+
   character = await CharacterModel.findById(character._id);
-  character.orbs.orb_of_fate = 1;
-  await character.save();
-
-  const respecInt = createMockInteraction(userId, { subcommand: 'respec', node_id: 'war_asc_berserker_rage' });
-  await treeCmd.execute(respecInt);
-  assert.ok(respecInt.getReply().content.includes('Successfully respecced'));
-
-  character = await CharacterModel.findById(character._id);
-  assert.equal(character.orbs.orb_of_fate, 0);
+  assert.equal(character.ascendPoints.available, 1);
+  assert.equal(character.ascendPoints.spent, 1);
 });
 
 test('Discord Commands Flow — /dungeon enter and combat buttons to victory', async () => {

@@ -181,6 +181,11 @@ export function ascendSubclass(character, subclassName) {
     throw new Error(`You have already Ascended into ${character.subclassName}.`);
   }
 
+  const minLevel = GAME_CONFIG.SKILL_TREE_GATES.ASCEND_MILESTONES[0];
+  if ((character.level || 1) < minLevel) {
+    throw new Error(`Requires Level ${minLevel} to Ascend (currently Level ${character.level || 1}).`);
+  }
+
   const gate = getPhaseGateStatus(className, 'subclass', character.passiveTree);
   if (!gate.met) {
     throw new Error(`Requires ${gate.required} points spent in Keystone nodes before you can Ascend (currently ${gate.current}).`);

@@ -1,8 +1,9 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
-import { createSkillTreeEmbed, createSkillTreeAllocateMenu } from '../embeds/uiBuilders.js';
+import { createSkillTreeEmbed, createSkillTreeAllocateMenu, createAscendancyEmbed, createAscendancyAllocateMenu } from '../embeds/uiBuilders.js';
 import { allocateNodePoint, respecNodePoint, getNodeById, ascendSubclass } from '../../game/skillTree/treeEngine.js';
+import { allocateAscendNode, resolveAscendMilestones } from '../../game/skillTree/ascendEngine.js';
 
 export const data = new SlashCommandBuilder()
   .setName('tree')
@@ -34,7 +35,10 @@ export const data = new SlashCommandBuilder()
             { name: 'Trapper (Ranger)', value: 'Trapper' },
             { name: 'Elementalist (Mage)', value: 'Elementalist' },
             { name: 'Battle Mage (Mage)', value: 'Battle Mage' }
-          )));
+          )))
+  .addSubcommand(sub =>
+    sub.setName('ascendancy')
+      .setDescription('View and spend Ascendancy Points on your subclass mini-tree'));
 
 export async function execute(interaction) {
   const subcommand = interaction.options.getSubcommand();
@@ -95,13 +99,32 @@ export async function execute(interaction) {
     const subclassName = interaction.options.getString('subclass');
     try {
       const res = ascendSubclass(character, subclassName);
+      const granted = resolveAscendMilestones(character);
       await character.save();
       return interaction.reply({
-        content: `⭐ **${character.name}** has Ascended into the **${res.subclassName}**!`
+        content: `⭐ **${character.name}** has Ascended into the **${res.subclassName}**! Granted **${granted}** Ascendancy Points — use \`/tree ascendancy\` to spend them.`
       });
     } catch (err) {
       return interaction.reply({ content: `❌ Ascend failed: ${err.message}`, ephemeral: true });
     }
+  }
+
+  if (subcommand === 'ascendancy') {
+    if (!character.subclassName) {
+      return interaction.reply({ content: '❌ You must `/tree ascend` into a subclass before spending Ascendancy Points.', ephemeral: true });
+    }
+
+    const embed = createAscendancyEmbed(character);
+    const selectMenuRow = createAscendancyAllocateMenu(character);
+
+    if (!selectMenuRow) {
+      return interaction.reply({ content: '❌ No eligible/affordable Ascendancy nodes right now.', ephemeral: true });
+    }
+
+    return interaction.reply({
+      embeds: [embed],
+      components: [selectMenuRow]
+    });
   }
 }
 
@@ -126,6 +149,35 @@ export async function handleTreeSelectMenu(interaction) {
 
     return interaction.update({
       content: `✅ Successfully allocated point into **${res.node.name}** (Rank ${res.newRank}/${res.node.maxRank})!`,
+      embeds: [embed],
+      components: selectMenuRow ? [selectMenuRow] : []
+    });
+  } catch (err) {
+    return interaction.reply({ content: `❌ Allocation failed: ${err.message}`, ephemeral: true });
+  }
+}
+
+export async function handleAscendancySelectMenu(interaction) {
+  if (interaction.customId !== 'ascendancy_allocate_select') return;
+
+  const discordId = interaction.user.id;
+  const user = await User.findOne({ discordId });
+  const character = await Character.findById(user?.activeCharacterId);
+
+  if (!character) {
+    return interaction.reply({ content: '❌ Character error.', ephemeral: true });
+  }
+
+  const selectedNodeId = interaction.values[0];
+  try {
+    const res = allocateAscendNode(character, selectedNodeId);
+    await character.save();
+
+    const embed = createAscendancyEmbed(character);
+    const selectMenuRow = createAscendancyAllocateMenu(character);
+
+    return interaction.update({
+      content: `✅ Successfully allocated **${res.node.name}**!`,
       embeds: [embed],
       components: selectMenuRow ? [selectMenuRow] : []
     });

@@ -15,7 +15,9 @@ export const GAME_CONFIG = {
   // "tier" already means dungeon difficulty and tree-node grouping elsewhere.
   SKILL_TREE_GATES: {
     SMALL_POINTS_FOR_KEYSTONE: 6,
-    KEYSTONE_POINTS_FOR_SUBCLASS: 2
+    KEYSTONE_POINTS_FOR_SUBCLASS: 2,
+    ASCEND_MILESTONES: [20, 40, 60, 80],
+    ASCEND_POINTS_PER_MILESTONE: 2
   },
   AFFIX_LIMITS: {
     MAGIC: { MAX_PREFIX: 1, MAX_SUFFIX: 1 },

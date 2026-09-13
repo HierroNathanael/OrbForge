@@ -2,6 +2,7 @@ import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelec
 import { BASE_CLASSES } from '../../game/classes/classData.js';
 import { SKILL_TREE_DATA } from '../../game/skillTree/treeData.js';
 import { getEligibleNodes, accumulateTreeStats, getPhaseGateStatus } from '../../game/skillTree/treeEngine.js';
+import { getAscendTree, getEligibleAscendNodes, accumulateAscendStats } from '../../game/skillTree/ascendEngine.js';
 import { calculateEffectiveStats } from '../../game/combat/combatEngine.js';
 import { GAME_CONFIG, xpToNextLevel } from '../../config/constants.js';
 
@@ -16,6 +17,10 @@ export function createCharacterProfileEmbed(character, equippedItems = []) {
   const subclassName = character.subclassName ? ` (${character.subclassName})` : ' (No Subclass)';
 
   const treeStats = accumulateTreeStats(character.className, character.passiveTree);
+  const ascendStats = accumulateAscendStats(character.subclassName, character.ascendTree);
+  for (const [stat, value] of Object.entries(ascendStats)) {
+    treeStats[stat] = (treeStats[stat] || 0) + value;
+  }
   const stats = calculateEffectiveStats(character, equippedItems, treeStats);
   const orbsObj = character.orbs?.toObject ? character.orbs.toObject() : (character.orbs || {});
 
@@ -104,12 +109,17 @@ export function createSkillTreeEmbed(character) {
   const className = character.className;
   const fullTreeText = buildFullTreeText(character);
 
+  const minLevel = GAME_CONFIG.SKILL_TREE_GATES.ASCEND_MILESTONES[0];
   const keystoneGate = getPhaseGateStatus(className, 'subclass', character.passiveTree);
+  const missingAscendReqs = [];
+  if ((character.level || 1) < minLevel) missingAscendReqs.push(`Level ${minLevel} (currently ${character.level || 1})`);
+  if (!keystoneGate.met) missingAscendReqs.push(`${keystoneGate.required} Keystone pts (currently ${keystoneGate.current})`);
+
   const ascendLine = character.subclassName
-    ? `**Subclass**: ${character.subclassName} ✅`
-    : keystoneGate.met
+    ? `**Subclass**: ${character.subclassName} ✅ — **${character.ascendPoints?.available ?? 0}** Ascendancy pts unspent, use \`/tree ascendancy\``
+    : missingAscendReqs.length === 0
       ? `**Subclass**: Not chosen — ⭐ \`/tree ascend\` is available!`
-      : `**Subclass**: Not chosen — 🔒 needs ${keystoneGate.required} Keystone pts (currently ${keystoneGate.current})`;
+      : `**Subclass**: Not chosen — 🔒 needs ${missingAscendReqs.join(' & ')}`;
 
   return new EmbedBuilder()
     .setTitle(`🌲 Skill Tree — ${character.name} (${className})`)
@@ -137,6 +147,84 @@ export function createSkillTreeAllocateMenu(character) {
     selectMenu.addOptions({
       label: `${node.name} (Rank ${currentRank + 1}/${node.maxRank})`,
       description: nextEffect ? nextEffect.label : 'Upgrade node',
+      value: node.id
+    });
+  }
+
+  return new ActionRowBuilder().addComponents(selectMenu);
+}
+
+const ASCEND_TIER_LABELS = { minor: '🌱 Minor Nodes', notable: '💎 Notables' };
+const ASCEND_TIER_ORDER = ['minor', 'notable'];
+
+export function createAscendancyEmbed(character) {
+  const subclassName = character.subclassName;
+
+  if (!subclassName) {
+    return new EmbedBuilder()
+      .setTitle(`⭐ Ascendancy — ${character.name}`)
+      .setColor('#9b59b6')
+      .setDescription('You have not Ascended yet. Use `/tree ascend` once eligible.');
+  }
+
+  const tree = getAscendTree(subclassName);
+  const allocatedMap = character.ascendTree instanceof Map ? Object.fromEntries(character.ascendTree) : (character.ascendTree || {});
+  const available = character.ascendPoints.available;
+
+  let text = '';
+  for (const tier of ASCEND_TIER_ORDER) {
+    const nodesInTier = tree.filter(n => n.tier === tier);
+    if (nodesInTier.length === 0) continue;
+
+    text += `\n**${ASCEND_TIER_LABELS[tier]}**\n`;
+    for (const node of nodesInTier) {
+      const rank = allocatedMap[node.id] || 0;
+      const prereqsMet = !node.prerequisites?.length || node.prerequisites.some(p => (allocatedMap[p] || 0) > 0);
+
+      let icon, status;
+      if (rank >= node.maxRank) {
+        icon = '✅';
+        status = `Allocated — ${node.effects[0].label}`;
+      } else if (!prereqsMet) {
+        const reqNames = node.prerequisites.map(id => tree.find(n => n.id === id)?.name || id).join(', ');
+        icon = '🔒';
+        status = `Requires: ${reqNames}`;
+      } else if (available < node.pointCost) {
+        icon = '🔒';
+        status = `Requires ${node.pointCost} pts (have ${available}) — ${node.effects[0].label}`;
+      } else {
+        icon = '⚪';
+        status = `Available (${node.pointCost} pt${node.pointCost > 1 ? 's' : ''}) — ${node.effects[0].label}`;
+      }
+
+      text += `${icon} **${node.name}** \`${node.id}\` — ${status}\n`;
+    }
+  }
+
+  return new EmbedBuilder()
+    .setTitle(`⭐ Ascendancy — ${character.name} (${subclassName})`)
+    .setColor('#9b59b6')
+    .setDescription(`Ascendancy Points Available: **${character.ascendPoints.available}**\nSpent: **${character.ascendPoints.spent}**\n${text}`)
+    .setFooter({ text: '✅ Allocated · ⚪ Available · 🔒 Locked — /tree ascendancy to spend.' });
+}
+
+export function createAscendancyAllocateMenu(character) {
+  if (!character.subclassName) return null;
+
+  const eligibleNodes = getEligibleAscendNodes(character.subclassName, character.ascendTree, character.ascendPoints.available);
+
+  if (eligibleNodes.length === 0) {
+    return null;
+  }
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId('ascendancy_allocate_select')
+    .setPlaceholder('Select an Ascendancy node to allocate...');
+
+  for (const node of eligibleNodes) {
+    selectMenu.addOptions({
+      label: `${node.name} (${node.pointCost} pt${node.pointCost > 1 ? 's' : ''})`,
+      description: node.effects[0].label,
       value: node.id
     });
   }

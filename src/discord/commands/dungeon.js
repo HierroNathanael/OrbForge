@@ -7,6 +7,7 @@ import { generateMapTicket, generateEncounterMonsters } from '../../game/maps/ma
 import { calculateEffectiveStats, resolveCombatRound, generatePersonalInstancedLoot } from '../../game/combat/combatEngine.js';
 import { createCombatEmbed, createCombatActionButtons, createLobbyEmbed, createLobbyButtons } from '../embeds/uiBuilders.js';
 import { accumulateTreeStats } from '../../game/skillTree/treeEngine.js';
+import { accumulateAscendStats } from '../../game/skillTree/ascendEngine.js';
 import { resolveLevelUps, GAME_CONFIG } from '../../config/constants.js';
 
 export const activeDungeonBattles = new Map();
@@ -44,6 +45,10 @@ async function buildPartyState(members) {
   for (const member of members) {
     const equippedItems = await Item.find({ characterId: member.character._id, isEquipped: true });
     const treeStats = accumulateTreeStats(member.character.className, member.character.passiveTree);
+    const ascendStats = accumulateAscendStats(member.character.subclassName, member.character.ascendTree);
+    for (const [stat, value] of Object.entries(ascendStats)) {
+      treeStats[stat] = (treeStats[stat] || 0) + value;
+    }
     const stats = calculateEffectiveStats(member.character, equippedItems, treeStats);
     partyState.push({
       character: member.character,

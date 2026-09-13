@@ -45,6 +45,15 @@ const characterSchema = new mongoose.Schema({
     available: { type: Number, default: 1 },
     spent: { type: Number, default: 0 }
   },
+  ascendPoints: {
+    available: { type: Number, default: 0 },
+    spent: { type: Number, default: 0 }
+  },
+  ascendTree: {
+    type: Map,
+    of: Number,
+    default: {}
+  }, // nodeId -> 0/1 (unranked)
   knownSkills: [knownSkillSchema],
   storageSlots: {
     base: { type: Number, default: 20 },

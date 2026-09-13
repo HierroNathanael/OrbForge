@@ -5,6 +5,7 @@ import { Item } from '../../models/Item.js';
 import { BASE_CLASSES } from '../../game/classes/classData.js';
 import { createCharacterProfileEmbed } from '../embeds/uiBuilders.js';
 import { resolveLevelUps } from '../../config/constants.js';
+import { resolveAscendMilestones } from '../../game/skillTree/ascendEngine.js';
 
 export const data = new SlashCommandBuilder()
   .setName('character')
@@ -95,7 +96,9 @@ export async function execute(interaction) {
       return interaction.reply({ content: '❌ Active character not found. Create one with `/character create`!', ephemeral: true });
     }
 
-    if (resolveLevelUps(character) > 0) {
+    const leveledUp = resolveLevelUps(character) > 0;
+    const grantedAscendPoints = resolveAscendMilestones(character) > 0;
+    if (leveledUp || grantedAscendPoints) {
       await character.save();
     }
 
