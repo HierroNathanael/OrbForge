@@ -1,9 +1,33 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
+import { BASE_CLASSES } from '../../game/classes/classData.js';
 import { createSkillTreeEmbed, createSkillTreeAllocateMenu, createAscendancyEmbed, createAscendancyAllocateMenu } from '../embeds/uiBuilders.js';
-import { allocateNodePoint, respecNodePoint, getNodeById, ascendSubclass } from '../../game/skillTree/treeEngine.js';
+import { allocateNodePoint, respecNodePoint, getNodeById, ascendSubclass, getClassTree } from '../../game/skillTree/treeEngine.js';
 import { allocateAscendNode, resolveAscendMilestones } from '../../game/skillTree/ascendEngine.js';
+
+// Subclass choices are per-class (e.g. a Ranger should only ever see
+// Sharpshooter/Trapper), but Discord slash-command `choices` are static and
+// shown to every user regardless of class — so this list is served via
+// autocomplete (handleAscendAutocomplete below) instead, filtered to the
+// requesting user's actual class. Exported standalone so it's testable
+// without mocking a Discord autocomplete interaction.
+export function getSubclassChoicesForClass(className) {
+  const classInfo = BASE_CLASSES[className];
+  if (!classInfo) return [];
+  return Object.values(classInfo.subclasses).map(s => ({ name: s.name, value: s.name }));
+}
+
+// The tree embed shows node names only (no raw IDs) now, so /tree respec's
+// node_id option is served via autocomplete instead — labeled by name, still
+// submits the id — scoped to this character's own currently-allocated nodes.
+export function getRespecChoicesForCharacter(character) {
+  const tree = getClassTree(character.className);
+  const allocatedMap = character.passiveTree instanceof Map ? Object.fromEntries(character.passiveTree) : (character.passiveTree || {});
+  return tree
+    .filter(node => (allocatedMap[node.id] || 0) > 0)
+    .map(node => ({ name: `${node.name} (Rank ${allocatedMap[node.id]}/${node.maxRank})`, value: node.id }));
+}
 
 export const data = new SlashCommandBuilder()
   .setName('tree')
@@ -19,8 +43,9 @@ export const data = new SlashCommandBuilder()
       .setDescription('Respec a previously allocated node')
       .addStringOption(opt =>
         opt.setName('node_id')
-          .setDescription('Node ID to respec')
-          .setRequired(true)))
+          .setDescription('Node to respec')
+          .setRequired(true)
+          .setAutocomplete(true)))
   .addSubcommand(sub =>
     sub.setName('ascend')
       .setDescription('Choose your subclass (free, one-time) once your Keystone gate is cleared')
@@ -28,14 +53,7 @@ export const data = new SlashCommandBuilder()
         opt.setName('subclass')
           .setDescription('Subclass to Ascend into')
           .setRequired(true)
-          .addChoices(
-            { name: 'Berserker (Warrior)', value: 'Berserker' },
-            { name: 'Guardian (Warrior)', value: 'Guardian' },
-            { name: 'Sharpshooter (Ranger)', value: 'Sharpshooter' },
-            { name: 'Trapper (Ranger)', value: 'Trapper' },
-            { name: 'Elementalist (Mage)', value: 'Elementalist' },
-            { name: 'Battle Mage (Mage)', value: 'Battle Mage' }
-          )))
+          .setAutocomplete(true)))
   .addSubcommand(sub =>
     sub.setName('ascendancy')
       .setDescription('View and spend Ascendancy Points on your subclass mini-tree'));
@@ -126,6 +144,32 @@ export async function execute(interaction) {
       components: [selectMenuRow]
     });
   }
+}
+
+export async function handleAscendAutocomplete(interaction) {
+  const discordId = interaction.user.id;
+  const user = await User.findOne({ discordId });
+  const character = user?.activeCharacterId ? await Character.findById(user.activeCharacterId) : null;
+
+  if (!character) {
+    return interaction.respond([]);
+  }
+
+  return interaction.respond(getSubclassChoicesForClass(character.className));
+}
+
+export async function handleRespecAutocomplete(interaction) {
+  const discordId = interaction.user.id;
+  const user = await User.findOne({ discordId });
+  const character = user?.activeCharacterId ? await Character.findById(user.activeCharacterId) : null;
+
+  if (!character) {
+    return interaction.respond([]);
+  }
+
+  const focused = interaction.options.getFocused().toLowerCase();
+  const choices = getRespecChoicesForCharacter(character).filter(c => c.name.toLowerCase().includes(focused));
+  return interaction.respond(choices.slice(0, 25));
 }
 
 export async function handleTreeSelectMenu(interaction) {

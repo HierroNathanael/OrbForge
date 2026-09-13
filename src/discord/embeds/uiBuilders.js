@@ -98,7 +98,7 @@ function buildFullTreeText(character) {
         status = `Unallocated — ${node.effects[0].label}`;
       }
 
-      text += `${icon} **${node.name}** \`${node.id}\` — ${status}\n`;
+      text += `${icon} **${node.name}** — ${status}\n`;
     }
   }
 
@@ -197,7 +197,7 @@ export function createAscendancyEmbed(character) {
         status = `Available (${node.pointCost} pt${node.pointCost > 1 ? 's' : ''}) — ${node.effects[0].label}`;
       }
 
-      text += `${icon} **${node.name}** \`${node.id}\` — ${status}\n`;
+      text += `${icon} **${node.name}** — ${status}\n`;
     }
   }
 

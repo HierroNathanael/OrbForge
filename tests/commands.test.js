@@ -369,9 +369,11 @@ test('Discord Commands Flow — /inventory view, equip, and /forge with dropped 
   await inventoryCmd.execute(equipInt);
   assert.ok(equipInt.getReply().content.includes('Equipped'));
 
-  // 3. /forge with Orb of Kindling
+  // 3. /forge with Orb of Kindling — starting orb inventory is 0, so seed one.
   item.rarity = 'Normal';
   await item.save();
+  char.orbs.orb_of_kindling = 1;
+  await char.save();
 
   const forgeInt = createMockInteraction(userId, {
     orb: GAME_CONFIG.ORB_TYPES.KINDLING,

@@ -1,7 +1,38 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { allocateNodePoint, respecNodePoint, accumulateTreeStats, getEligibleNodes, getTierPointsSpent, getPhaseGateStatus, ascendSubclass } from '../src/game/skillTree/treeEngine.js';
+import { getSubclassChoicesForClass, getRespecChoicesForCharacter } from '../src/discord/commands/tree.js';
 import { GAME_CONFIG } from '../src/config/constants.js';
+
+test('Skill Tree — getSubclassChoicesForClass only returns that class\'s own subclasses', () => {
+  const warriorChoices = getSubclassChoicesForClass('Warrior').map(c => c.value).sort();
+  assert.deepEqual(warriorChoices, ['Berserker', 'Guardian']);
+
+  const rangerChoices = getSubclassChoicesForClass('Ranger').map(c => c.value).sort();
+  assert.deepEqual(rangerChoices, ['Sharpshooter', 'Trapper']);
+
+  const mageChoices = getSubclassChoicesForClass('Mage').map(c => c.value).sort();
+  assert.deepEqual(mageChoices, ['Battle Mage', 'Elementalist']);
+
+  assert.deepEqual(getSubclassChoicesForClass('NotAClass'), []);
+});
+
+test('Skill Tree — getRespecChoicesForCharacter only lists currently-allocated nodes', () => {
+  const character = {
+    className: 'Warrior',
+    passiveTree: new Map([['war_str_1', 2], ['war_hp_1', 1]])
+  };
+
+  const choices = getRespecChoicesForCharacter(character);
+  const values = choices.map(c => c.value).sort();
+  assert.deepEqual(values, ['war_hp_1', 'war_str_1']);
+
+  const strChoice = choices.find(c => c.value === 'war_str_1');
+  assert.ok(strChoice.name.includes('Physical Might'));
+  assert.ok(strChoice.name.includes('Rank 2/3'));
+
+  assert.deepEqual(getRespecChoicesForCharacter({ className: 'Warrior', passiveTree: new Map() }), []);
+});
 
 test('Skill Tree — Allocation and Stat Accumulation', () => {
   const character = {

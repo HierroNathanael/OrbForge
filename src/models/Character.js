@@ -23,11 +23,11 @@ const characterSchema = new mongoose.Schema({
   xp: { type: Number, default: 0, min: 0 },
   gold: { type: Number, default: 100, min: 0 },
   orbs: {
-    orb_of_kindling:   { type: Number, default: 5 }, // Normal -> Magic
-    orb_of_tempering:  { type: Number, default: 5 }, // Add affix to magic
+    orb_of_kindling:   { type: Number, default: 0 }, // Normal -> Magic
+    orb_of_tempering:  { type: Number, default: 0 }, // Add affix to magic
     orb_of_unmaking:   { type: Number, default: 0 }, // Reroll rare affixes
-    orb_of_cleansing:  { type: Number, default: 2 }, // Strip to normal
-    orb_of_ascendance: { type: Number, default: 1 }, // Normal -> Rare
+    orb_of_cleansing:  { type: Number, default: 0 }, // Strip to normal
+    orb_of_ascendance: { type: Number, default: 0 }, // Normal -> Rare
     orb_of_zenith:     { type: Number, default: 0 }, // Add high-tier affix to rare
     orb_of_fate:       { type: Number, default: 0 }  // Subclass respec
   },

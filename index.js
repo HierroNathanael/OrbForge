@@ -35,6 +35,18 @@ client.once(Events.ClientReady, c => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
+  if (interaction.isAutocomplete()) {
+    if (interaction.commandName === 'tree') {
+      const focusedName = interaction.options.getFocused(true).name;
+      if (focusedName === 'subclass') {
+        await treeCmd.handleAscendAutocomplete(interaction);
+      } else if (focusedName === 'node_id') {
+        await treeCmd.handleRespecAutocomplete(interaction);
+      }
+    }
+    return;
+  }
+
   if (interaction.isChatInputCommand()) {
     const command = client.commands.get(interaction.commandName);
     if (!command) return;

@@ -78,6 +78,22 @@ export const SKILL_REGISTRY = {
       { rank: 3, damageMultiplier: 2.0, cost: 0, cooldown: 1 }
     ]
   },
+  piercing_arrow: {
+    id: 'piercing_arrow',
+    name: 'Piercing Arrow',
+    emoji: '➶',
+    description: 'A relentless shot that punches clean through enemy defenses.',
+    role: 'dps',
+    target: 'single_enemy',
+    requirements: { dexterity: 12 },
+    ranks: [
+      { rank: 1, damageMultiplier: 2.0, cost: 0, cooldown: 1 },
+      { rank: 2, damageMultiplier: 2.5, cost: 0, cooldown: 1 },
+      { rank: 3, damageMultiplier: 3.1, cost: 0, cooldown: 1 },
+      { rank: 4, damageMultiplier: 3.8, cost: 0, cooldown: 1 },
+      { rank: 5, damageMultiplier: 4.6, cost: 0, cooldown: 1 }
+    ]
+  },
 
   // ─── Mage / Intelligence Skills ────────────────────────────────────────────
   fireball: {
@@ -143,16 +159,29 @@ export function checkSkillUsability(character, skillId) {
   return { usable: true };
 }
 
+// Core skills every character of a class has regardless of subclass (or
+// before Ascending). Warrior/Mage keep both their skills here — they have
+// no subclass-specific skill yet, so this is unchanged from before.
+const CLASS_CORE_SKILLS = {
+  Warrior: ['heavy_strike', 'shield_taunt'],
+  Ranger: ['snipe'],
+  Mage: ['fireball', 'divine_heal']
+};
+
+// A skill unlocked only once Ascended into that specific subclass — capped
+// at 2 total combat buttons (createSoloCombatActionButtons/
+// createPartyMemberRow both slice to 2), so this only takes effect for
+// classes whose core list has room left (currently just Ranger).
+const SUBCLASS_SKILLS = {
+  Trapper: 'poison_trap',
+  Sharpshooter: 'piercing_arrow'
+};
+
 export function getCharacterCombatSkills(character) {
   const className = character.className || 'Warrior';
-  
-  // Default class skill loadouts
-  const classSkillMap = {
-    Warrior: ['heavy_strike', 'shield_taunt'],
-    Ranger: ['snipe', 'poison_trap'],
-    Mage: ['fireball', 'divine_heal']
-  };
+  const core = CLASS_CORE_SKILLS[className] || ['heavy_strike'];
+  const subclassSkillId = SUBCLASS_SKILLS[character.subclassName];
 
-  const candidateIds = classSkillMap[className] || ['heavy_strike'];
-  return candidateIds.map(id => SKILL_REGISTRY[id]).filter(Boolean);
+  const candidateIds = subclassSkillId ? [...core, subclassSkillId] : core;
+  return candidateIds.slice(0, 2).map(id => SKILL_REGISTRY[id]).filter(Boolean);
 }
