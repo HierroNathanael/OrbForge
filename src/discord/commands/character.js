@@ -6,6 +6,7 @@ import { BASE_CLASSES } from '../../game/classes/classData.js';
 import { createCharacterProfileEmbed } from '../embeds/uiBuilders.js';
 import { resolveLevelUps } from '../../config/constants.js';
 import { resolveAscendMilestones } from '../../game/skillTree/ascendEngine.js';
+import { CLASS_CORE_SKILL } from '../../game/skills/skillRegistry.js';
 
 export const data = new SlashCommandBuilder()
   .setName('character')
@@ -70,7 +71,8 @@ export async function execute(interaction) {
       name,
       className,
       baseStats: classConfig.baseStats,
-      skillPoints: { available: 1, spent: 0 }
+      skillPoints: { available: 1, spent: 0 },
+      knownSkills: [{ skillId: CLASS_CORE_SKILL[className], rank: 1, source: 'starting_kit' }]
     });
 
     user.activeCharacterId = newCharacter._id;

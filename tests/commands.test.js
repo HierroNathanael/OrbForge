@@ -5,6 +5,7 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 
 import * as characterCmd from '../src/discord/commands/character.js';
 import * as treeCmd from '../src/discord/commands/tree.js';
+import * as skillsCmd from '../src/discord/commands/skills.js';
 import * as dungeonCmd from '../src/discord/commands/dungeon.js';
 import * as inventoryCmd from '../src/discord/commands/inventory.js';
 import * as forgeCmd from '../src/discord/commands/forge.js';
@@ -77,6 +78,10 @@ test('Discord Commands Flow — /character create, profile, list, select', async
   assert.ok(createReply.content.includes('Successfully created character'));
   assert.equal(createReply.embeds.length, 1);
 
+  const createdChar = await mongoose.model('Character').findOne({ discordId: userId, name: 'Valerius' });
+  assert.deepEqual(createdChar.knownSkills.map(k => k.skillId), ['heavy_strike']);
+  assert.equal(createdChar.knownSkills[0].source, 'starting_kit');
+
   // 2. /character profile
   const profileInt = createMockInteraction(userId, { subcommand: 'profile' });
   await characterCmd.execute(profileInt);
@@ -115,6 +120,61 @@ test('Discord Commands Flow — /tree view, allocate, respec', async () => {
   const respecInt = createMockInteraction(userId, { subcommand: 'respec', node_id: 'war_str_1' });
   await treeCmd.execute(respecInt);
   assert.ok(respecInt.getReply().content.includes('Successfully respecced'));
+});
+
+test('Discord Commands Flow — /skills learn, equip, and rankup', async () => {
+  const userId = 'skill_learner';
+  await characterCmd.execute(createMockInteraction(userId, { subcommand: 'create', name: 'Learner', class: 'Warrior' }));
+
+  const CharacterModel = mongoose.model('Character');
+  const ItemModel = mongoose.model('Item');
+  let character = await CharacterModel.findOne({ discordId: userId });
+
+  // 1. /skills view before learning anything — just the core skill.
+  const viewBeforeInt = createMockInteraction(userId, { subcommand: 'view' });
+  await skillsCmd.execute(viewBeforeInt);
+  assert.equal(viewBeforeInt.getReply().embeds.length, 1);
+
+  // 2. Seed a Skill Book (drops are RNG-gated, same seeding pattern used for gear drops elsewhere).
+  const book = await ItemModel.create({
+    characterId: character._id,
+    baseItemId: 'skillbook_shield_taunt',
+    name: 'Skill Book: Shield Taunt',
+    type: 'skill_book',
+    skillId: 'shield_taunt',
+    rarity: 'Normal',
+    iLvl: 1
+  });
+
+  // 3. /skills learn
+  const learnInt = createMockInteraction(userId, { subcommand: 'learn', item_id: book._id.toString() });
+  await skillsCmd.execute(learnInt);
+  assert.ok(learnInt.getReply().content.includes('learned'));
+
+  character = await CharacterModel.findById(character._id);
+  assert.deepEqual(character.knownSkills.map(k => k.skillId).sort(), ['heavy_strike', 'shield_taunt']);
+  assert.equal(await ItemModel.findById(book._id), null, 'Book should be consumed');
+
+  // 4. /skills equip
+  const equipInt = createMockInteraction(userId, { subcommand: 'equip', skill_id: 'shield_taunt' });
+  await skillsCmd.execute(equipInt);
+  assert.ok(equipInt.getReply().content.includes('Equipped'));
+
+  character = await CharacterModel.findById(character._id);
+  assert.deepEqual(character.activeSkillLoadout, ['shield_taunt']);
+
+  // 5. /skills rankup — grant a Combat Skill Point directly (mirrors how other tests seed currency/points).
+  character.combatSkillPoints.available = 1;
+  await character.save();
+
+  const rankupInt = createMockInteraction(userId, { subcommand: 'rankup', skill_id: 'shield_taunt' });
+  await skillsCmd.execute(rankupInt);
+  assert.ok(rankupInt.getReply().content.includes('ranked up'));
+
+  character = await CharacterModel.findById(character._id);
+  const shieldTaunt = character.knownSkills.find(k => k.skillId === 'shield_taunt');
+  assert.equal(shieldTaunt.rank, 2);
+  assert.equal(character.combatSkillPoints.available, 0);
 });
 
 test('Discord Commands Flow — /tree phase gate, ascend grants Ascendancy Points, /tree ascendancy allocates them', async () => {

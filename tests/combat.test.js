@@ -24,6 +24,26 @@ test('Combat Engine — Option B Simultaneous Round Resolution', () => {
   assert.ok(enemyList[0].hp < 50); // Monster took damage
 });
 
+test('Combat Engine — a ranked-up skill deals more damage than rank 1', () => {
+  const enemyList = () => ([{ id: 'm1', name: 'Training Dummy', hp: 99999, maxHp: 99999, damage: 0, armor: 0, evasion: 0, isBoss: false }]);
+
+  const rank1Character = { _id: 'char_r1', name: 'Novice', className: 'Warrior', level: 10, baseStats: { strength: 15, dexterity: 10, intelligence: 10 }, knownSkills: [{ skillId: 'heavy_strike', rank: 1 }] };
+  const rank1Stats = calculateEffectiveStats(rank1Character, [], {});
+  const rank1Party = [{ character: rank1Character, stats: rank1Stats, currentHp: rank1Stats.maxHp, tauntTurns: 0, armorBuffPercent: 0 }];
+  const rank1Enemies = enemyList();
+  resolveCombatRound(rank1Party, rank1Enemies, { char_r1: { type: 'skill', skillId: 'heavy_strike' } });
+  const rank1Damage = 99999 - rank1Enemies[0].hp;
+
+  const rank5Character = { _id: 'char_r5', name: 'Veteran', className: 'Warrior', level: 10, baseStats: { strength: 15, dexterity: 10, intelligence: 10 }, knownSkills: [{ skillId: 'heavy_strike', rank: 5 }] };
+  const rank5Stats = calculateEffectiveStats(rank5Character, [], {});
+  const rank5Party = [{ character: rank5Character, stats: rank5Stats, currentHp: rank5Stats.maxHp, tauntTurns: 0, armorBuffPercent: 0 }];
+  const rank5Enemies = enemyList();
+  resolveCombatRound(rank5Party, rank5Enemies, { char_r5: { type: 'skill', skillId: 'heavy_strike' } });
+  const rank5Damage = 99999 - rank5Enemies[0].hp;
+
+  assert.ok(rank5Damage > rank1Damage, `Expected rank 5 damage (${rank5Damage}) > rank 1 damage (${rank1Damage})`);
+});
+
 test('Combat Engine — Tier 0 Tutorial Dungeon generation and balance', () => {
   const ticket = generateMapTicket(0);
   assert.equal(ticket.tier, 0);
@@ -142,6 +162,43 @@ test('Combat Engine — blockChance halves retaliate damage when triggered', () 
   const dmgTakenFullBlock = baseStats.maxHp - partyFullBlock[0].currentHp;
 
   assert.ok(dmgTakenFullBlock <= Math.ceil(dmgTakenNoBlock / 2) + 1, `Blocked damage (${dmgTakenFullBlock}) should be roughly half of unblocked (${dmgTakenNoBlock})`);
+});
+
+test('Combat Engine — a skill whose stat requirement is unmet downgrades to a Basic Attack', () => {
+  const character = { _id: 'char_weak', name: 'Weakling', className: 'Warrior', level: 10, baseStats: { strength: 5, dexterity: 10, intelligence: 10 } };
+  const stats = calculateEffectiveStats(character, [], {});
+
+  const partyState = [
+    { character, stats, currentHp: stats.maxHp, tauntTurns: 0, armorBuffPercent: 0 }
+  ];
+  const enemyList = [
+    { id: 'm1', name: 'Goblin Guard', hp: 50, maxHp: 50, damage: 10, armor: 5, evasion: 0, isBoss: false }
+  ];
+
+  // heavy_strike requires 12 Strength; this character only has 5.
+  const result = resolveCombatRound(partyState, enemyList, {
+    char_weak: { type: 'skill', skillId: 'heavy_strike' }
+  });
+
+  assert.ok(result.roundLogs.some(l => l.includes("doesn't meet the requirements") && l.includes('Heavy Strike')));
+});
+
+test('Combat Engine — a skill whose stat requirement is met executes normally', () => {
+  const character = { _id: 'char_strong', name: 'Strongman', className: 'Warrior', level: 10, baseStats: { strength: 15, dexterity: 10, intelligence: 10 } };
+  const stats = calculateEffectiveStats(character, [], {});
+
+  const partyState = [
+    { character, stats, currentHp: stats.maxHp, tauntTurns: 0, armorBuffPercent: 0 }
+  ];
+  const enemyList = [
+    { id: 'm1', name: 'Goblin Guard', hp: 50, maxHp: 50, damage: 10, armor: 5, evasion: 0, isBoss: false }
+  ];
+
+  const result = resolveCombatRound(partyState, enemyList, {
+    char_strong: { type: 'skill', skillId: 'heavy_strike' }
+  });
+
+  assert.ok(!result.roundLogs.some(l => l.includes("doesn't meet the requirements")));
 });
 
 test('Combat Engine — Personal Instanced Loot Generation', () => {

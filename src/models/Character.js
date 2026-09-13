@@ -2,7 +2,8 @@ import mongoose from 'mongoose';
 
 const knownSkillSchema = new mongoose.Schema({
   skillId: { type: String, required: true },
-  rank: { type: Number, default: 1, min: 1, max: 5 }
+  rank: { type: Number, default: 1, min: 1, max: 5 },
+  source: { type: String, default: 'skillbook_drop' }
 }, { _id: false });
 
 const characterSchema = new mongoose.Schema({
@@ -55,6 +56,11 @@ const characterSchema = new mongoose.Schema({
     default: {}
   }, // nodeId -> 0/1 (unranked)
   knownSkills: [knownSkillSchema],
+  combatSkillPoints: {
+    available: { type: Number, default: 0 },
+    spent: { type: Number, default: 0 }
+  },
+  activeSkillLoadout: { type: [String], default: [] }, // holds 0-1 skillId (the player-chosen 2nd combat slot)
   storageSlots: {
     base: { type: Number, default: 20 },
     purchased: { type: Number, default: 0 },

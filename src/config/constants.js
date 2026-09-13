@@ -52,7 +52,8 @@ export const GAME_CONFIG = {
     RARE: 'Rare',
     LEGENDARY: 'Legendary'
   },
-  EQUIPMENT_SLOTS: ['weapon', 'helm', 'chest', 'boots', 'ring', 'amulet']
+  EQUIPMENT_SLOTS: ['weapon', 'helm', 'chest', 'boots', 'ring', 'amulet'],
+  SKILL_BOOK_DROP_CHANCE: 0.12
 };
 
 export function xpToNextLevel(level) {
@@ -67,6 +68,7 @@ export function resolveLevelUps(character) {
     character.xp -= xpToNextLevel(character.level);
     character.level += 1;
     character.skillPoints.available += 1;
+    character.combatSkillPoints.available += 1;
     levelsGained += 1;
   }
   return levelsGained;

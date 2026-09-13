@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder } from 'discord.js';
 import { data as characterCmd } from './character.js';
 import { data as treeCmd } from './tree.js';
+import { data as skillsCmd } from './skills.js';
 import { data as forgeCmd } from './forge.js';
 import { data as dungeonCmd } from './dungeon.js';
 import { data as tutorialCmd } from './tutorial.js';
@@ -9,7 +10,7 @@ import { data as tradeCmd } from './trade.js';
 import { data as redeemCmd } from './redeem.js';
 
 const allCommands = [
-  characterCmd, treeCmd, forgeCmd, dungeonCmd, tutorialCmd,
+  characterCmd, treeCmd, skillsCmd, forgeCmd, dungeonCmd, tutorialCmd,
   inventoryCmd, tradeCmd, redeemCmd
 ];
 

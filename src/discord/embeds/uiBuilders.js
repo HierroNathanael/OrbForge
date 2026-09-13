@@ -233,6 +233,17 @@ export function createAscendancyAllocateMenu(character) {
 }
 
 export function createItemTooltip(item) {
+  if (item.type === 'skill_book') {
+    const skill = SKILL_REGISTRY[item.skillId];
+    return new EmbedBuilder()
+      .setTitle(`📖 ${item.name}`)
+      .setColor('#e67e22')
+      .addFields(
+        { name: 'Teaches', value: skill ? `**${skill.name}** ${skill.emoji || ''}\n*${skill.description}*` : '*Unknown skill*', inline: false },
+        { name: 'Item ID (for /skills learn)', value: `\`${item._id}\``, inline: false }
+      );
+  }
+
   const prefixes = (item.prefixes || []).map(p => `🔹 *${p.name}*: +${p.value} ${p.stat.replace(/_/g, ' ')}`).join('\n') || '*None*';
   const suffixes = (item.suffixes || []).map(s => `🔸 *${s.name}*: +${s.value} ${s.stat.replace(/_/g, ' ')}`).join('\n') || '*None*';
 
@@ -278,7 +289,31 @@ export function createCombatEmbed(encounterState) {
     .setFooter({ text: 'Option B Simultaneous Round Resolution • Turn-based ARPG' });
 }
 
-import { getCharacterCombatSkills } from '../../game/skills/skillRegistry.js';
+import { getCharacterCombatSkills, checkSkillUsability, SKILL_REGISTRY, CLASS_CORE_SKILL } from '../../game/skills/skillRegistry.js';
+
+export function createSkillsEmbed(character) {
+  const coreId = CLASS_CORE_SKILL[character.className];
+  const equippedId = character.activeSkillLoadout?.[0];
+
+  const knownLines = (character.knownSkills || []).map(known => {
+    const skill = SKILL_REGISTRY[known.skillId];
+    if (!skill) return null;
+    const tag = known.skillId === coreId ? ' (core)' : known.skillId === equippedId ? ' (equipped)' : '';
+    return `• **${skill.name}**${tag} — Rank ${known.rank}/${skill.ranks.length}`;
+  }).filter(Boolean).join('\n') || '*No skills known.*';
+
+  const slot2Text = equippedId && SKILL_REGISTRY[equippedId] ? SKILL_REGISTRY[equippedId].name : '*None equipped — use `/skills equip`*';
+
+  return new EmbedBuilder()
+    .setTitle(`📖 Skills — ${character.name}`)
+    .setColor('#e67e22')
+    .setDescription(
+      `**Combat Skill Points**: ${character.combatSkillPoints.available} available / ${character.combatSkillPoints.spent} spent\n` +
+      `**2nd Combat Slot**: ${slot2Text}\n\n` +
+      `**Known Skills**\n${knownLines}`
+    )
+    .setFooter({ text: '/skills learn a Skill Book · /skills equip a slot · /skills rankup with Combat Skill Points' });
+}
 
 export function createLobbyEmbed(lobby) {
   const memberList = lobby.members
@@ -340,8 +375,9 @@ function createSoloCombatActionButtons(character, currentMana, enemyList) {
   const actionRow = new ActionRowBuilder();
   for (const skill of skills.slice(0, 2)) {
     const style = (skill.role === 'tank' || skill.role === 'support') ? ButtonStyle.Success : ButtonStyle.Danger;
-    const cost = skill.ranks && skill.ranks[0] ? (skill.ranks[0].cost || 0) : 0;
-    const disabled = currentMana < cost;
+    const rankIndex = (skill.currentRank || 1) - 1;
+    const cost = skill.ranks && skill.ranks[rankIndex] ? (skill.ranks[rankIndex].cost || 0) : 0;
+    const disabled = currentMana < cost || !checkSkillUsability(character, skill.id).usable;
 
     // Single-target damage skills get one button per living enemy, same as Attack.
     // AoE/self/party skills (e.g. Shield Taunt, Fireball, Divine Heal) hit everyone
@@ -399,13 +435,14 @@ function createPartyMemberRow(member) {
 
   for (const skill of skills.slice(0, 2)) {
     const style = (skill.role === 'tank' || skill.role === 'support') ? ButtonStyle.Success : ButtonStyle.Danger;
-    const cost = skill.ranks && skill.ranks[0] ? (skill.ranks[0].cost || 0) : 0;
+    const rankIndex = (skill.currentRank || 1) - 1;
+    const cost = skill.ranks && skill.ranks[rankIndex] ? (skill.ranks[rankIndex].cost || 0) : 0;
     row.addComponents(
       new ButtonBuilder()
         .setCustomId(`combat:skill:${skill.id}:${characterId}`)
         .setLabel(`${skill.name} ${skill.emoji || '✨'}${cost > 0 ? ` (${cost} MP)` : ''}`.slice(0, 80))
         .setStyle(style)
-        .setDisabled(currentMana < cost)
+        .setDisabled(currentMana < cost || !checkSkillUsability(character, skill.id).usable)
     );
   }
 

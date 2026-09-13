@@ -1,4 +1,4 @@
-import { SKILL_REGISTRY } from '../skills/skillRegistry.js';
+import { SKILL_REGISTRY, checkSkillUsability, getSkillRankForCharacter, getBookLearnableSkillIds } from '../skills/skillRegistry.js';
 import { GAME_CONFIG } from '../../config/constants.js';
 
 export function calculateEffectiveStats(character, equippedItems = [], treeStats = {}) {
@@ -111,13 +111,21 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
 
     if (action.type === 'skill' && action.skillId) {
       const skill = SKILL_REGISTRY[action.skillId];
-      const cost = skill && skill.ranks && skill.ranks[0] ? (skill.ranks[0].cost || 0) : 0;
-      if (skill && typeof member.currentMana === 'number') {
-        if (member.currentMana < cost) {
-          roundLogs.push(`🔷 **${member.character.name}** lacked Mana for **${skill.name}** (needs ${cost}, has ${member.currentMana}) — used Basic Attack instead.`);
-          action = { type: 'attack' };
-        } else {
-          member.currentMana -= cost;
+      const usability = skill ? checkSkillUsability(member.character, action.skillId) : { usable: false };
+
+      if (skill && !usability.usable) {
+        roundLogs.push(`🚫 **${member.character.name}** doesn't meet the requirements for **${skill.name}** (${usability.reason}) — used Basic Attack instead.`);
+        action = { type: 'attack' };
+      } else if (skill) {
+        const rank = getSkillRankForCharacter(member.character, action.skillId);
+        const cost = skill.ranks && skill.ranks[rank - 1] ? (skill.ranks[rank - 1].cost || 0) : 0;
+        if (typeof member.currentMana === 'number') {
+          if (member.currentMana < cost) {
+            roundLogs.push(`🔷 **${member.character.name}** lacked Mana for **${skill.name}** (needs ${cost}, has ${member.currentMana}) — used Basic Attack instead.`);
+            action = { type: 'attack' };
+          } else {
+            member.currentMana -= cost;
+          }
         }
       }
     }
@@ -170,7 +178,8 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
     if (action.type === 'skill' && action.skillId) {
       const skill = SKILL_REGISTRY[action.skillId];
       if (skill && skill.role === 'dps') {
-        const mult = skill.ranks && skill.ranks[0] ? skill.ranks[0].damageMultiplier : 1.5;
+        const rank = getSkillRankForCharacter(member.character, action.skillId);
+        const mult = skill.ranks && skill.ranks[rank - 1] ? skill.ranks[rank - 1].damageMultiplier : 1.5;
         rawDamage = Math.round(rawDamage * mult);
         if (skill.target === 'all_enemies') isAoE = true;
       }
@@ -309,6 +318,26 @@ export function generatePersonalInstancedLoot(character, mapTier = 1, boostMulti
         armor: (type === 'helm' || type === 'chest' || type === 'boots') ? 8 + (mapTier * 4) : 0,
         health: (type === 'ring' || type === 'amulet') ? 15 + (mapTier * 8) : 0
       },
+      prefixes: [],
+      suffixes: []
+    });
+  }
+
+  // Drop chance for a Skill Book — independent of the gear roll, teaches
+  // whichever skill it drops for once learned via /skills learn.
+  if (Math.random() < GAME_CONFIG.SKILL_BOOK_DROP_CHANCE * dropMult) {
+    const pool = getBookLearnableSkillIds();
+    const skillId = pool[Math.floor(Math.random() * pool.length)];
+    const skill = SKILL_REGISTRY[skillId];
+
+    items.push({
+      baseItemId: `skillbook_${skillId}`,
+      name: `Skill Book: ${skill.name}`,
+      type: 'skill_book',
+      skillId,
+      rarity: 'Normal',
+      iLvl: Math.min(100, Math.max(1, mapTier * 10)),
+      baseStats: {},
       prefixes: [],
       suffixes: []
     });

@@ -2,6 +2,7 @@ import { REST, Routes } from 'discord.js';
 import dotenv from 'dotenv';
 import { data as characterCmd } from './commands/character.js';
 import { data as treeCmd } from './commands/tree.js';
+import { data as skillsCmd } from './commands/skills.js';
 import { data as forgeCmd } from './commands/forge.js';
 import { data as dungeonCmd } from './commands/dungeon.js';
 import { data as tutorialCmd } from './commands/tutorial.js';
@@ -16,6 +17,7 @@ dotenv.config();
 const commands = [
   characterCmd.toJSON(),
   treeCmd.toJSON(),
+  skillsCmd.toJSON(),
   forgeCmd.toJSON(),
   dungeonCmd.toJSON(),
   tutorialCmd.toJSON(),

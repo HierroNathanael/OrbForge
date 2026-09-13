@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import { connectDatabase } from './src/config/database.js';
 import * as characterCmd from './src/discord/commands/character.js';
 import * as treeCmd from './src/discord/commands/tree.js';
+import * as skillsCmd from './src/discord/commands/skills.js';
 import * as forgeCmd from './src/discord/commands/forge.js';
 import * as dungeonCmd from './src/discord/commands/dungeon.js';
 import * as tutorialCmd from './src/discord/commands/tutorial.js';
@@ -20,7 +21,7 @@ const client = new Client({
 
 client.commands = new Collection();
 
-const commands = [characterCmd, treeCmd, forgeCmd, dungeonCmd, tutorialCmd, inventoryCmd, tradeCmd, redeemCmd, redeemCreateCmd, helpCmd];
+const commands = [characterCmd, treeCmd, skillsCmd, forgeCmd, dungeonCmd, tutorialCmd, inventoryCmd, tradeCmd, redeemCmd, redeemCreateCmd, helpCmd];
 for (const cmd of commands) {
   if (cmd.data && cmd.data.name) {
     client.commands.set(cmd.data.name, cmd);
@@ -42,6 +43,15 @@ client.on(Events.InteractionCreate, async interaction => {
         await treeCmd.handleAscendAutocomplete(interaction);
       } else if (focusedName === 'node_id') {
         await treeCmd.handleRespecAutocomplete(interaction);
+      }
+    } else if (interaction.commandName === 'skills') {
+      const subcommand = interaction.options.getSubcommand();
+      if (subcommand === 'learn') {
+        await skillsCmd.handleLearnAutocomplete(interaction);
+      } else if (subcommand === 'equip') {
+        await skillsCmd.handleEquipAutocomplete(interaction);
+      } else if (subcommand === 'rankup') {
+        await skillsCmd.handleRankupAutocomplete(interaction);
       }
     }
     return;

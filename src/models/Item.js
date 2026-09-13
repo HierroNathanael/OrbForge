@@ -11,11 +11,12 @@ const itemSchema = new mongoose.Schema({
   characterId: { type: mongoose.Schema.Types.ObjectId, ref: 'Character', required: true, index: true },
   baseItemId: { type: String, required: true },
   name: { type: String, required: true },
-  type: { 
-    type: String, 
-    required: true, 
-    enum: ['weapon', 'helm', 'chest', 'boots', 'ring', 'amulet', 'map_ticket'] 
+  type: {
+    type: String,
+    required: true,
+    enum: ['weapon', 'helm', 'chest', 'boots', 'ring', 'amulet', 'map_ticket', 'skill_book']
   },
+  skillId: { type: String, default: null }, // set only for type: 'skill_book'
   rarity: { 
     type: String, 
     required: true, 

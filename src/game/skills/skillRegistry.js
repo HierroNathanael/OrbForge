@@ -159,29 +159,41 @@ export function checkSkillUsability(character, skillId) {
   return { usable: true };
 }
 
-// Core skills every character of a class has regardless of subclass (or
-// before Ascending). Warrior/Mage keep both their skills here — they have
-// no subclass-specific skill yet, so this is unchanged from before.
-const CLASS_CORE_SKILLS = {
-  Warrior: ['heavy_strike', 'shield_taunt'],
-  Ranger: ['snipe'],
-  Mage: ['fireball', 'divine_heal']
+// The one guaranteed combat skill every character of a class starts with —
+// everything else must be learned from a dropped Skill Book (see
+// skillBookEngine.js) and equipped into the 2nd combat slot via /skills equip.
+export const CLASS_CORE_SKILL = {
+  Warrior: 'heavy_strike',
+  Ranger: 'snipe',
+  Mage: 'fireball'
 };
 
-// A skill unlocked only once Ascended into that specific subclass — capped
-// at 2 total combat buttons (createSoloCombatActionButtons/
-// createPartyMemberRow both slice to 2), so this only takes effect for
-// classes whose core list has room left (currently just Ranger).
-const SUBCLASS_SKILLS = {
-  Trapper: 'poison_trap',
-  Sharpshooter: 'piercing_arrow'
-};
+// Every registry skill that isn't a guaranteed core skill — the book-drop
+// pool. Not class-locked (per the design doc, any class can learn any book;
+// stat requirements are what actually gate usability).
+export function getBookLearnableSkillIds() {
+  const coreIds = new Set(Object.values(CLASS_CORE_SKILL));
+  return Object.keys(SKILL_REGISTRY).filter(id => !coreIds.has(id));
+}
+
+export function getSkillRankForCharacter(character, skillId) {
+  const entry = (character.knownSkills || []).find(k => k.skillId === skillId);
+  const skill = SKILL_REGISTRY[skillId];
+  const rank = entry ? entry.rank : 1;
+  return skill ? Math.min(rank, skill.ranks.length) : rank;
+}
 
 export function getCharacterCombatSkills(character) {
   const className = character.className || 'Warrior';
-  const core = CLASS_CORE_SKILLS[className] || ['heavy_strike'];
-  const subclassSkillId = SUBCLASS_SKILLS[character.subclassName];
+  const coreId = CLASS_CORE_SKILL[className] || 'heavy_strike';
+  const knownIds = new Set((character.knownSkills || []).map(k => k.skillId));
 
-  const candidateIds = subclassSkillId ? [...core, subclassSkillId] : core;
-  return candidateIds.slice(0, 2).map(id => SKILL_REGISTRY[id]).filter(Boolean);
+  const slot2 = character.activeSkillLoadout?.[0];
+  const loadout = [coreId, slot2 && knownIds.has(slot2) ? slot2 : null].filter(Boolean);
+
+  return loadout.map(id => {
+    const skill = SKILL_REGISTRY[id];
+    if (!skill) return null;
+    return { ...skill, currentRank: getSkillRankForCharacter(character, id) };
+  }).filter(Boolean);
 }
