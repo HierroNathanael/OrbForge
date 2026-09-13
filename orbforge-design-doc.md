@@ -31,9 +31,10 @@
 ## 2. Classes & Subclasses — REVISED: 3 Base Classes
 
 - **3 base classes** (revised down from 5): **Warrior, Ranger, Mage** — references: Ragnarok Online, Dragon Nest job-class structure. Simpler roster fits scope better and matches classic ARPG genre expectations more directly than an original 5-class roster.
-- Each class unlocks **2 subclasses** (Ascendancy-style) at a level milestone.
-- Subclass grants a small bonus node set (8–12 nodes), separate from the main tree.
-- **Subclass choice is respec-able**, but at a higher cost than normal tree respec (see Respec Costs below) — keeps build identity meaningful without permanently bricking new players.
+- Each class unlocks **2 subclasses** (Ascendancy-style) via `/tree ascend` — **confirmed, implemented**: requires **Level 20** (the "level milestone" this section originally left vague) *and* clearing the main tree's Keystone gate (Section 3). First pick is free and permanent; no in-command subclass switching yet (would need a full tree respec, not currently built).
+- **Subclass grants a dedicated 6-node Ascendancy mini-tree, not a shared main-tree branch** (originally scoped as "8–12 nodes... separate from the main tree" — implemented smaller and as its own fully separate system rather than a branch): **4 Minor nodes (1 Ascendancy Point each) + 2 Notable nodes (2 points each) = 8 points total**, spent from a points pool that's entirely separate from main-tree skill points.
+  - Ascendancy Points are earned **only** at level milestones **20 / 40 / 60 / 80** (2 points each) — not from every level-up like main-tree points. Ascending late backfills every milestone already passed.
+- **Subclass choice is respec-able at the individual node level** (see Respec Costs below) — an outright subclass *switch* (picking the other branch after committing) is not yet implemented, only per-node respec within your current subclass's mini-tree.
 
 ### Solo Viability Rule — Every Subclass Must Be Soloable
 - **Design constraint**: dungeons must be clearable solo, not party-required. This changes how roles are assigned.
@@ -57,18 +58,20 @@
 ## 3. Skill Tree (Torchlight-style ranked nodes)
 
 - **Text/menu-based**, not a visual node map — navigated via Discord Select Menus.
-- ~**40–60 nodes per class**, each node rankable up to **3 times** (escalating effect per rank) instead of 100+ single-purpose nodes.
+- Currently **Small → Keystone only** (per class, ~6-8 nodes total) — the originally-scoped ~40–60 nodes/class is long-term content scope, not yet built out; Subclass/Ascendancy content lives in its own mini-tree now (Section 2), no longer a third tier of this same tree.
+- Each node rankable up to **3 times** (escalating effect per rank) instead of 100+ single-purpose nodes.
   - Compresses content scope while preserving meaningful breadth-vs-depth choices.
-- `/tree view` — embed showing allocated nodes/points, grouped by branch.
-- `/tree allocate` — Select Menu shows only currently-eligible nodes (prereqs met); refreshes as points are spent.
-- Node tiers: **Small node** (cheap) → **Keystone/major node** (moderate) → **Subclass/Ascendancy node** (expensive).
+- `/tree view` — embed showing allocated nodes/points, grouped by branch; node names only, no raw IDs (see `/tree respec` below).
+- `/tree allocate` — Select Menu shows only currently-eligible nodes (prereqs met **and** the phase gate below); refreshes as points are spent.
+- **Phase gate — confirmed, implemented** (this was the open design question behind gating "the next phase" of the tree behind a spend threshold): a class's Keystone nodes stay locked until **6 points** are spent in its Small nodes; `/tree ascend` itself stays locked until **2 points** are spent in Keystone nodes (on top of the Level 20 requirement, Section 2).
+- `/tree respec node_id:` — autocomplete-driven, scoped to the character's own currently-allocated nodes (named, not raw IDs).
 
 ### Respec Costs (tiered)
 | Node type | Respec cost | Rationale |
 |---|---|---|
-| Small/regular node | Cheap (Gold or low-tier Orb) | Frequent tweaking should be frictionless |
-| Keystone/major node | Moderate | Bigger build-defining choice |
-| Subclass/Ascendancy node | Expensive (rare currency) | Identity-level choice, shouldn't be casual |
+| Small/regular node | Cheap (Gold) | Frequent tweaking should be frictionless |
+| Keystone/major node | Moderate (Gold) | Bigger build-defining choice |
+| Ascendancy node | 1 **Orb of Fate** — confirmed, implemented | Identity-level choice, shouldn't be casual |
 
 ---
 
@@ -143,6 +146,7 @@
 | Defend | Both | Utility, damage reduction this round |
 
 - All skills stat-gated (not class-locked) — consistent with Section 6b's "any class can learn any book, usability gated by stat requirement" rule.
+- **Implementation status**: only **2 combat skills per character** are wired up today, via a hardcoded class+subclass lookup (`skillRegistry.js`), not the Skill Book acquisition/independent-ranking system described in 6b — that system (and the rest of the roster in the tables above: Rending Blow, Bloodlust, Fortify, Second Wind, Snare Trap, Evasive Roll, Chain Lightning, Arcane Overload, Arcane Shield, Mana Ward, Focus, Defend) is still future scope. Of what's live: Warrior and Mage each keep their existing 2 (subclass-independent so far). **Ranger — confirmed, implemented**: Snipe Shot is a core skill (available pre-Ascend and to both subclasses, a deliberate deviation from this table's "Sharpshooter" lean so Rangers aren't skill-less before ascending); Poison Trap and Piercing Arrow now unlock only after Ascending into Trapper/Sharpshooter respectively, matching this table's lean for those two.
 
 ### Gear Slots
 
@@ -283,6 +287,7 @@ activeCharacterId: ObjectId
 | **Orbs** | Crafting currency | Drops, dungeon rewards (earned only) | Crafting/rerolling gear — player economy |
 
 - **Rationale**: keeps the game entirely F2P-clean with no monetization surface to design/regulate around — no loot-box, top-up, or pay-for-speed concerns at all.
+- **Starting inventory — confirmed, implemented**: new characters begin with **0 Orbs of every type** (an earlier build granted a small free starter stock — removed to keep "earned only" true from character creation onward, not just at endgame). 100 starting Gold is unchanged.
 - Character slots are fixed at 3 (Section 8) — no purchase path.
 - `/shop`, the FIFO EXP/Drop boost queue, and the auto-battle pass are all removed along with the currency that funded them.
 - **Cosmetics** (text-game-appropriate, no art needed), earned via play (milestones, seasonal goals — Section 10c), not purchased:
@@ -338,7 +343,7 @@ mapItem: { tier: Number, modifiers: [...] } // consumed on use
 
 ## 12. Open Questions — Working Answers (revisable)
 
-- **Subclass-respec cost**: a dedicated rare currency (e.g. "Orb of Fate"), obtained from weekly/seasonal content or rare dungeon drops only — not vendor-purchasable. Keeps subclass changes meaningful without being pay-to-instant-switch.
+- ~~**Subclass-respec cost**~~ — resolved and implemented as originally answered: 1 **Orb of Fate** per Ascendancy node respec (Section 3). Still true to the "not vendor-purchasable" intent — **Orb of Fate currently has no drop source wired up anywhere**, so in practice it's unobtainable in live play yet. Open follow-up: add it to the dungeon drop table (or another acquisition path) before this respec path is actually usable.
 - ~~**5-class roster**~~ — superseded, see Section 2 (revised to 3 classes: Warrior / Ranger / Mage).
 - **Dungeon/endgame structure**: resolved — see Section 10b (map-tier ticket system).
 - ~~**Real-money monetization (Gems, top-ups, supporter packs, battle pass)**~~ — removed entirely, see Section 9. Revisit only as a fresh design pass if ever wanted.
