@@ -8,7 +8,14 @@ export const GAME_CONFIG = {
   RESPEC_COSTS: {
     SMALL_NODE_GOLD: 100,
     KEYSTONE_GOLD: 500,
-    SUBCLASS_ORB: 'orb_of_unmaking'
+    SUBCLASS_ORB: 'orb_of_fate'
+  },
+  // Total points that must be spent in the preceding tier before the next
+  // tier's nodes become allocatable. Not called "tiers" in messaging —
+  // "tier" already means dungeon difficulty and tree-node grouping elsewhere.
+  SKILL_TREE_GATES: {
+    SMALL_POINTS_FOR_KEYSTONE: 6,
+    KEYSTONE_POINTS_FOR_SUBCLASS: 2
   },
   AFFIX_LIMITS: {
     MAGIC: { MAX_PREFIX: 1, MAX_SUFFIX: 1 },

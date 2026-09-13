@@ -1,7 +1,7 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder } from 'discord.js';
 import { BASE_CLASSES } from '../../game/classes/classData.js';
 import { SKILL_TREE_DATA } from '../../game/skillTree/treeData.js';
-import { getEligibleNodes, accumulateTreeStats } from '../../game/skillTree/treeEngine.js';
+import { getEligibleNodes, accumulateTreeStats, getPhaseGateStatus } from '../../game/skillTree/treeEngine.js';
 import { calculateEffectiveStats } from '../../game/combat/combatEngine.js';
 import { GAME_CONFIG, xpToNextLevel } from '../../config/constants.js';
 
@@ -67,6 +67,9 @@ function buildFullTreeText(character) {
       const rank = allocatedMap[node.id] || 0;
       const prereqsMet = !node.prerequisites?.length || node.prerequisites.some(p => (allocatedMap[p] || 0) > 0);
       const subclassLocked = node.tier === 'subclass' && node.subclassName !== subclassName;
+      const gate = (node.tier === 'keystone' || node.tier === 'subclass')
+        ? getPhaseGateStatus(className, node.tier, allocatedMap)
+        : { applicable: false, met: true };
 
       let icon, status;
       if (rank >= node.maxRank) {
@@ -78,6 +81,9 @@ function buildFullTreeText(character) {
       } else if (subclassLocked) {
         icon = '🔒';
         status = `Requires Subclass: ${node.subclassName}`;
+      } else if (gate.applicable && !gate.met) {
+        icon = '🔒';
+        status = `Requires ${gate.required} pts in ${gate.fromTierLabel} tier (currently ${gate.current})`;
       } else if (!prereqsMet) {
         const reqNames = node.prerequisites.map(id => tree.find(n => n.id === id)?.name || id).join(', ');
         icon = '🔒';
@@ -98,10 +104,17 @@ export function createSkillTreeEmbed(character) {
   const className = character.className;
   const fullTreeText = buildFullTreeText(character);
 
+  const keystoneGate = getPhaseGateStatus(className, 'subclass', character.passiveTree);
+  const ascendLine = character.subclassName
+    ? `**Subclass**: ${character.subclassName} ✅`
+    : keystoneGate.met
+      ? `**Subclass**: Not chosen — ⭐ \`/tree ascend\` is available!`
+      : `**Subclass**: Not chosen — 🔒 needs ${keystoneGate.required} Keystone pts (currently ${keystoneGate.current})`;
+
   return new EmbedBuilder()
     .setTitle(`🌲 Skill Tree — ${character.name} (${className})`)
     .setColor('#2ecc71')
-    .setDescription(`Available Skill Points: **${character.skillPoints.available}**\nSpent Points: **${character.skillPoints.spent}**\n${fullTreeText}`)
+    .setDescription(`Available Skill Points: **${character.skillPoints.available}**\nSpent Points: **${character.skillPoints.spent}**\n${ascendLine}\n${fullTreeText}`)
     .setFooter({ text: '✅ Maxed · 🟢 Ranked · ⚪ Available · 🔒 Locked — /tree allocate to spend, /tree respec to reset.' });
 }
 

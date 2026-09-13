@@ -1,5 +1,6 @@
 import { SKILL_TREE_DATA } from './treeData.js';
 import { GAME_CONFIG } from '../../config/constants.js';
+import { BASE_CLASSES } from '../classes/classData.js';
 
 export function getClassTree(className) {
   return SKILL_TREE_DATA[className] || [];
@@ -10,6 +11,29 @@ export function getNodeById(className, nodeId) {
   return tree.find(node => node.id === nodeId);
 }
 
+export function getTierPointsSpent(className, allocatedTree, tier) {
+  const tree = getClassTree(className);
+  const allocatedMap = allocatedTree instanceof Map ? Object.fromEntries(allocatedTree) : (allocatedTree || {});
+  let total = 0;
+  for (const node of tree) {
+    if (node.tier !== tier) continue;
+    total += allocatedMap[node.id] || 0;
+  }
+  return total;
+}
+
+const PHASE_GATES = {
+  keystone: { fromTier: 'small', fromTierLabel: 'Small', threshold: GAME_CONFIG.SKILL_TREE_GATES.SMALL_POINTS_FOR_KEYSTONE },
+  subclass: { fromTier: 'keystone', fromTierLabel: 'Keystone', threshold: GAME_CONFIG.SKILL_TREE_GATES.KEYSTONE_POINTS_FOR_SUBCLASS }
+};
+
+export function getPhaseGateStatus(className, tier, allocatedTree) {
+  const gate = PHASE_GATES[tier];
+  if (!gate) return { applicable: false, met: true };
+  const current = getTierPointsSpent(className, allocatedTree, gate.fromTier);
+  return { applicable: true, met: current >= gate.threshold, current, required: gate.threshold, fromTierLabel: gate.fromTierLabel };
+}
+
 export function getEligibleNodes(className, subclassName, allocatedTree) {
   const tree = getClassTree(className);
   const allocatedMap = allocatedTree instanceof Map ? Object.fromEntries(allocatedTree) : (allocatedTree || {});
@@ -17,6 +41,10 @@ export function getEligibleNodes(className, subclassName, allocatedTree) {
   return tree.filter(node => {
     // If it's a subclass node, character must have that exact subclass
     if (node.tier === 'subclass' && node.subclassName !== subclassName) {
+      return false;
+    }
+
+    if ((node.tier === 'keystone' || node.tier === 'subclass') && !getPhaseGateStatus(className, node.tier, allocatedTree).met) {
       return false;
     }
 
@@ -57,6 +85,13 @@ export function allocateNodePoint(character, nodeId) {
 
   if (node.tier === 'subclass' && node.subclassName !== subclassName) {
     throw new Error(`Must have subclass ${node.subclassName} to allocate this node.`);
+  }
+
+  if (node.tier === 'keystone' || node.tier === 'subclass') {
+    const gate = getPhaseGateStatus(className, node.tier, character.passiveTree);
+    if (!gate.met) {
+      throw new Error(`Requires ${gate.required} points spent in ${gate.fromTierLabel} nodes (currently ${gate.current}).`);
+    }
   }
 
   if (node.prerequisites && node.prerequisites.length > 0) {
@@ -104,15 +139,16 @@ export function respecNodePoint(character, nodeId) {
     }
     character.gold -= cost.amount;
   } else if (cost.type === 'orb') {
-    const currentOrbs = character.orbs.get ? character.orbs.get(cost.currency) : (character.orbs[cost.currency] || 0);
+    // Plain property access (not .get()/.set()) — on a real Mongoose
+    // document, `orbs` is a nested schema path whose .get()/.set() expect
+    // the full "orbs.<field>" path, not a bare field name, and silently
+    // return/no-op on a short key. Direct property access goes through the
+    // schema's own getter/setter either way and works for plain objects too.
+    const currentOrbs = character.orbs[cost.currency] || 0;
     if (currentOrbs < cost.amount) {
-      throw new Error(`Requires 1 ${cost.currency} (Orb of Unmaking) to respec a subclass node.`);
+      throw new Error(`Requires 1 ${cost.currency} (Orb of Fate) to respec a subclass node.`);
     }
-    if (character.orbs.set) {
-      character.orbs.set(cost.currency, currentOrbs - cost.amount);
-    } else {
-      character.orbs[cost.currency] = currentOrbs - cost.amount;
-    }
+    character.orbs[cost.currency] = currentOrbs - cost.amount;
   }
 
   const newRank = currentRank - 1;
@@ -127,6 +163,31 @@ export function respecNodePoint(character, nodeId) {
   character.skillPoints.spent -= 1;
 
   return { node, newRank };
+}
+
+export function ascendSubclass(character, subclassName) {
+  const className = character.className;
+  const classInfo = BASE_CLASSES[className];
+  if (!classInfo) throw new Error(`Unknown class ${className}.`);
+
+  // classData.js object keys (e.g. "BattleMage") don't match the stored
+  // value (e.g. "Battle Mage") — always compare against `.name`, never Object.keys().
+  const validNames = Object.values(classInfo.subclasses).map(s => s.name);
+  if (!validNames.includes(subclassName)) {
+    throw new Error(`${subclassName} is not a valid subclass for ${className}. Choose one of: ${validNames.join(', ')}.`);
+  }
+
+  if (character.subclassName) {
+    throw new Error(`You have already Ascended into ${character.subclassName}.`);
+  }
+
+  const gate = getPhaseGateStatus(className, 'subclass', character.passiveTree);
+  if (!gate.met) {
+    throw new Error(`Requires ${gate.required} points spent in Keystone nodes before you can Ascend (currently ${gate.current}).`);
+  }
+
+  character.subclassName = subclassName;
+  return { subclassName };
 }
 
 export function accumulateTreeStats(className, allocatedTree) {

@@ -19,6 +19,10 @@ export function calculateEffectiveStats(character, equippedItems = [], treeStats
   let critMultiplier = 1.50;
   let lifesteal = 0.0;
   let damagePercent = 0.0;
+  let armorPercent = 0.0;
+  let evasionPercent = 0.0;
+  let blockChance = 0.0;
+  let healPowerPercent = 0.0;
 
   // Add passive tree stats
   maxHp += treeStats.health || 0;
@@ -30,6 +34,21 @@ export function calculateEffectiveStats(character, equippedItems = [], treeStats
   critMultiplier += treeStats.crit_multiplier || 0;
   lifesteal += treeStats.lifesteal || 0;
   damagePercent += treeStats.damage_percent || 0;
+
+  // Primary-stat contributions — mirrors the existing
+  // baseStats.intelligence*3 -> mana convention above.
+  armor += (treeStats.strength || 0) * 1;
+  evasion += (treeStats.dexterity || 0) * 2;
+  maxMana += (treeStats.intelligence || 0) * 3;
+
+  // Percent stats fold into the nearest existing pipeline — there's no
+  // separate physical/elemental or melee/spell pipeline in this engine.
+  damagePercent += treeStats.elemental_damage_percent || 0;
+  critChance += treeStats.spell_crit || 0;
+  armorPercent += treeStats.armor_percent || 0;
+  evasionPercent += treeStats.evasion_percent || 0;
+  blockChance += treeStats.block_chance || 0;
+  healPowerPercent += treeStats.heal_power_percent || 0;
 
   // Add equipped item affixes and base stats
   for (const item of equippedItems) {
@@ -54,6 +73,9 @@ export function calculateEffectiveStats(character, equippedItems = [], treeStats
   }
 
   damage = Math.round(damage * (1 + damagePercent));
+  armor = Math.round(armor * (1 + armorPercent));
+  evasion = Math.round(evasion * (1 + evasionPercent));
+  blockChance = Math.min(0.75, blockChance);
   maxMana = Math.round(maxMana);
 
   return {
@@ -68,7 +90,9 @@ export function calculateEffectiveStats(character, equippedItems = [], treeStats
     evasion,
     critChance,
     critMultiplier,
-    lifesteal
+    lifesteal,
+    blockChance,
+    healPowerPercent
   };
 }
 
@@ -110,7 +134,7 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
       if (skill) {
         if (skill.role === 'support') {
           // Heal all allies
-          const healVal = Math.round(member.stats.maxHp * 0.25 + 30);
+          const healVal = Math.round((member.stats.maxHp * 0.25 + 30) * (1 + (member.stats.healPowerPercent || 0)));
           for (const ally of partyState) {
             ally.currentHp = Math.min(ally.stats.maxHp, ally.currentHp + healVal);
           }
@@ -198,6 +222,12 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
     let rawEnemyDmg = enemy.damage;
     if (targetPlayer.isDefending) rawEnemyDmg = Math.round(rawEnemyDmg * 0.5);
 
+    let isBlocked = false;
+    if (!targetPlayer.isDefending && Math.random() < (targetPlayer.stats.blockChance || 0)) {
+      rawEnemyDmg = Math.round(rawEnemyDmg * 0.5);
+      isBlocked = true;
+    }
+
     const hitChance = Math.max(0.2, 1 - (targetPlayer.stats.evasion / (enemy.damage * 5 + targetPlayer.stats.evasion)));
     if (Math.random() > hitChance) {
       roundLogs.push(`🍃 **${enemy.name}** attacked **${targetPlayer.character.name}** but DODGED!`);
@@ -207,7 +237,8 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
     const finalDamage = Math.max(1, Math.round(rawEnemyDmg * (100 / (100 + effectiveArmor))));
     targetPlayer.currentHp = Math.max(0, targetPlayer.currentHp - finalDamage);
 
-    roundLogs.push(`🩸 **${enemy.name}** hit **${targetPlayer.character.name}** for **${finalDamage} damage**!`);
+    const blockText = isBlocked ? ' 🛡️ BLOCKED!' : '';
+    roundLogs.push(`🩸 **${enemy.name}** hit **${targetPlayer.character.name}** for **${finalDamage} damage**!${blockText}`);
   }
 
   // Tick down taunt / temp buffs, regen Mana

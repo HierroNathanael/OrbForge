@@ -117,6 +117,70 @@ test('Discord Commands Flow — /tree view, allocate, respec', async () => {
   assert.ok(respecInt.getReply().content.includes('Successfully respecced'));
 });
 
+test('Discord Commands Flow — /tree phase gate, ascend, and subclass respec via Orb of Fate', async () => {
+  const userId = 'tree_ascender';
+  await characterCmd.execute(createMockInteraction(userId, { subcommand: 'create', name: 'Ascender', class: 'Warrior' }));
+
+  const CharacterModel = mongoose.model('Character');
+  let character = await CharacterModel.findOne({ discordId: userId });
+  character.skillPoints.available = 20;
+  await character.save();
+
+  const allocate = async (nodeId) => {
+    const selectInt = createMockInteraction(userId, { values: [nodeId] }, 'tree_allocate_select');
+    await treeCmd.handleTreeSelectMenu(selectInt);
+    return selectInt.getReply();
+  };
+
+  // Below the Small->Keystone gate: keystone node is rejected.
+  await allocate('war_str_1');
+  const blockedReply = await allocate('war_keystone_bloodthirst');
+  assert.ok(blockedReply.content.includes('Allocation failed'));
+
+  // Reach 6 Small points (gate threshold) then a Keystone prerequisite.
+  await allocate('war_str_1');
+  await allocate('war_str_1');
+  await allocate('war_hp_1');
+  await allocate('war_hp_1');
+  await allocate('war_hp_1');
+  await allocate('war_dmg_1');
+
+  // Gate now met — keystone node allocates.
+  const keystoneReply1 = await allocate('war_keystone_bloodthirst');
+  assert.ok(keystoneReply1.content.includes('Successfully allocated'));
+
+  // Ascend blocked below the Keystone->Subclass gate (1 keystone point spent).
+  const earlyAscendInt = createMockInteraction(userId, { subcommand: 'ascend', subclass: 'Berserker' });
+  await treeCmd.execute(earlyAscendInt);
+  assert.ok(earlyAscendInt.getReply().content.includes('Ascend failed'));
+
+  // Reach 2 Keystone points — gate met.
+  await allocate('war_keystone_bloodthirst');
+
+  const ascendInt = createMockInteraction(userId, { subcommand: 'ascend', subclass: 'Berserker' });
+  await treeCmd.execute(ascendInt);
+  assert.ok(ascendInt.getReply().content.includes('Ascended into the **Berserker**'));
+
+  character = await CharacterModel.findById(character._id);
+  assert.equal(character.subclassName, 'Berserker');
+
+  // Subclass node now allocatable.
+  const subclassReply = await allocate('war_asc_berserker_rage');
+  assert.ok(subclassReply.content.includes('Successfully allocated'));
+
+  // Subclass-node respec now costs Orb of Fate, not Orb of Unmaking.
+  character = await CharacterModel.findById(character._id);
+  character.orbs.orb_of_fate = 1;
+  await character.save();
+
+  const respecInt = createMockInteraction(userId, { subcommand: 'respec', node_id: 'war_asc_berserker_rage' });
+  await treeCmd.execute(respecInt);
+  assert.ok(respecInt.getReply().content.includes('Successfully respecced'));
+
+  character = await CharacterModel.findById(character._id);
+  assert.equal(character.orbs.orb_of_fate, 0);
+});
+
 test('Discord Commands Flow — /dungeon enter and combat buttons to victory', async () => {
   const userId = 'user_123';
 

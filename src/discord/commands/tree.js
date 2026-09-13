@@ -2,7 +2,7 @@ import { SlashCommandBuilder } from 'discord.js';
 import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
 import { createSkillTreeEmbed, createSkillTreeAllocateMenu } from '../embeds/uiBuilders.js';
-import { allocateNodePoint, respecNodePoint, getNodeById } from '../../game/skillTree/treeEngine.js';
+import { allocateNodePoint, respecNodePoint, getNodeById, ascendSubclass } from '../../game/skillTree/treeEngine.js';
 
 export const data = new SlashCommandBuilder()
   .setName('tree')
@@ -19,7 +19,22 @@ export const data = new SlashCommandBuilder()
       .addStringOption(opt =>
         opt.setName('node_id')
           .setDescription('Node ID to respec')
-          .setRequired(true)));
+          .setRequired(true)))
+  .addSubcommand(sub =>
+    sub.setName('ascend')
+      .setDescription('Choose your subclass (free, one-time) once your Keystone gate is cleared')
+      .addStringOption(opt =>
+        opt.setName('subclass')
+          .setDescription('Subclass to Ascend into')
+          .setRequired(true)
+          .addChoices(
+            { name: 'Berserker (Warrior)', value: 'Berserker' },
+            { name: 'Guardian (Warrior)', value: 'Guardian' },
+            { name: 'Sharpshooter (Ranger)', value: 'Sharpshooter' },
+            { name: 'Trapper (Ranger)', value: 'Trapper' },
+            { name: 'Elementalist (Mage)', value: 'Elementalist' },
+            { name: 'Battle Mage (Mage)', value: 'Battle Mage' }
+          )));
 
 export async function execute(interaction) {
   const subcommand = interaction.options.getSubcommand();
@@ -73,6 +88,19 @@ export async function execute(interaction) {
       });
     } catch (err) {
       return interaction.reply({ content: `❌ Respec failed: ${err.message}`, ephemeral: true });
+    }
+  }
+
+  if (subcommand === 'ascend') {
+    const subclassName = interaction.options.getString('subclass');
+    try {
+      const res = ascendSubclass(character, subclassName);
+      await character.save();
+      return interaction.reply({
+        content: `⭐ **${character.name}** has Ascended into the **${res.subclassName}**!`
+      });
+    } catch (err) {
+      return interaction.reply({ content: `❌ Ascend failed: ${err.message}`, ephemeral: true });
     }
   }
 }
