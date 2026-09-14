@@ -4,7 +4,21 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export async function connectDatabase(customUri = null) {
-  const uri = customUri || process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/orbforge';
+  const uri = customUri || process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error('MONGODB_URI is not set. Add it to your .env file before starting the bot.');
+  }
+
+  mongoose.connection.on('error', (error) => {
+    console.error('[Database] Connection error:', error.message);
+  });
+  mongoose.connection.on('disconnected', () => {
+    console.warn('[Database] ⚠️ Disconnected from MongoDB.');
+  });
+  mongoose.connection.on('reconnected', () => {
+    console.log('[Database] ✅ Reconnected to MongoDB.');
+  });
+
   try {
     console.log('[Database] Connecting to MongoDB...');
     await mongoose.connect(uri, {

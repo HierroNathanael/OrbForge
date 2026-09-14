@@ -41,14 +41,35 @@ export async function execute(interaction) {
     return interaction.reply({ content: '❌ You need an active character first! Use `/character create`.', ephemeral: true });
   }
 
-  const redeemCode = await RedeemCode.findOne({ code });
-  if (!redeemCode || !redeemCode.active) {
-    return interaction.reply({ content: `❌ **${code}** is not a valid code.`, ephemeral: true });
-  }
-  if (redeemCode.redeemedByCharacterIds.some(id => id.equals(character._id))) {
-    return interaction.reply({ content: `❌ You already redeemed **${code}**.`, ephemeral: true });
-  }
-  if (redeemCode.maxRedemptions !== null && redeemCode.redeemedByCharacterIds.length >= redeemCode.maxRedemptions) {
+  // Atomic find+update: the "not already redeemed" and "under the redemption
+  // limit" checks are evaluated by MongoDB as part of the same operation that
+  // pushes the redemption, so two different users racing the same
+  // limited-use code can't both pass the check before either write lands.
+  const redeemCode = await RedeemCode.findOneAndUpdate(
+    {
+      code,
+      active: true,
+      redeemedByCharacterIds: { $ne: character._id },
+      $expr: {
+        $or: [
+          { $eq: ['$maxRedemptions', null] },
+          { $lt: [{ $size: '$redeemedByCharacterIds' }, '$maxRedemptions'] }
+        ]
+      }
+    },
+    { $push: { redeemedByCharacterIds: character._id } },
+    { new: true }
+  );
+
+  if (!redeemCode) {
+    // Redetermine which case applied, purely for a clear error message.
+    const existing = await RedeemCode.findOne({ code });
+    if (!existing || !existing.active) {
+      return interaction.reply({ content: `❌ **${code}** is not a valid code.`, ephemeral: true });
+    }
+    if (existing.redeemedByCharacterIds.some(id => id.equals(character._id))) {
+      return interaction.reply({ content: `❌ You already redeemed **${code}**.`, ephemeral: true });
+    }
     return interaction.reply({ content: `❌ **${code}** has reached its redemption limit.`, ephemeral: true });
   }
 
@@ -56,10 +77,8 @@ export async function execute(interaction) {
   for (const [orbType, amount] of redeemCode.rewardOrbs.entries()) {
     character.orbs[orbType] = (character.orbs[orbType] || 0) + amount;
   }
-  redeemCode.redeemedByCharacterIds.push(character._id);
 
   await character.save();
-  await redeemCode.save();
 
   return interaction.reply({
     content: `✅ **${code}** redeemed! You received: ${rewardSummary(redeemCode)}`,

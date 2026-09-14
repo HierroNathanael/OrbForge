@@ -3,7 +3,7 @@ import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
 import { Item } from '../../models/Item.js';
 import { DungeonLobby } from '../../models/DungeonLobby.js';
-import { generateMapTicket, generateEncounterMonsters } from '../../game/maps/mapEngine.js';
+import { generateMapTicket, generateEncounterMonsters, MAP_TIERS } from '../../game/maps/mapEngine.js';
 import { calculateEffectiveStats, resolveCombatRound, generatePersonalInstancedLoot } from '../../game/combat/combatEngine.js';
 import { createCombatEmbed, createCombatActionButtons, createLobbyEmbed, createLobbyButtons } from '../embeds/uiBuilders.js';
 import { accumulateTreeStats } from '../../game/skillTree/treeEngine.js';
@@ -97,6 +97,14 @@ export async function execute(interaction) {
   // Default to Tier 0 (Tutorial) if character level <= 2, otherwise Tier 1
   const tier = selectedTier !== null ? selectedTier : (character.level <= 2 ? 0 : 1);
 
+  const minLevel = MAP_TIERS[tier]?.baseLevel ?? 1;
+  if (character.level < minLevel) {
+    return interaction.reply({
+      content: `❌ **${MAP_TIERS[tier].name}** requires Level ${minLevel} (you are Level ${character.level}).`,
+      ephemeral: true
+    });
+  }
+
   if (findActiveBattleForCharacter(character._id)) {
     return interaction.reply({ content: '❌ You are already in an active dungeon battle! Finish it before starting another.', ephemeral: true });
   }
@@ -146,6 +154,10 @@ export async function handleLobbyButton(interaction) {
     const joinCharacter = await Character.findById(joinUser.activeCharacterId);
     if (!joinCharacter) {
       return interaction.reply({ content: '❌ Active character not found. Create one with `/character create`!', ephemeral: true });
+    }
+    const joinMinLevel = MAP_TIERS[lobbyDoc.tier]?.baseLevel ?? 1;
+    if (joinCharacter.level < joinMinLevel) {
+      return interaction.reply({ content: `❌ **${MAP_TIERS[lobbyDoc.tier].name}** requires Level ${joinMinLevel} (you are Level ${joinCharacter.level}).`, ephemeral: true });
     }
     if (findActiveBattleForCharacter(joinCharacter._id)) {
       return interaction.reply({ content: '❌ You are already in an active dungeon battle! Finish it before joining another.', ephemeral: true });
@@ -254,10 +266,15 @@ export async function handleCombatButton(interaction) {
   }
 
   if (!targetBattle) {
-    return interaction.reply({ 
-      content: '⚠️ This dungeon battle session has finished or expired. Start a new run with `/dungeon enter`!', 
-      ephemeral: true 
+    return interaction.reply({
+      content: '⚠️ This dungeon battle session has finished or expired. Start a new run with `/dungeon enter`!',
+      ephemeral: true
     });
+  }
+
+  const actingMember = targetBattle.partyState.find(m => m.character._id.toString() === characterId);
+  if (actingMember.character.discordId !== interaction.user.id) {
+    return interaction.reply({ content: '❌ You can only act for your own character.', ephemeral: true });
   }
 
   targetBattle.pendingActions[characterId] = {

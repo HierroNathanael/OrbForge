@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, ActionRowBuilder, StringSelectMenuBuilder, AttachmentBuilder } from 'discord.js';
+import mongoose from 'mongoose';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { User } from '../../models/User.js';
@@ -72,8 +73,17 @@ export async function execute(interaction) {
     character.orbs[orbType] = currentOrbs - 1;
   }
 
-  await character.save();
-  await item.save();
+  // Currency deduction and the crafted item must land together — a crash
+  // between saves would otherwise burn the orb with no crafting effect applied.
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      await character.save({ session });
+      await item.save({ session });
+    });
+  } finally {
+    await session.endSession();
+  }
 
   const tooltipEmbed = createItemTooltip(item);
 

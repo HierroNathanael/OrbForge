@@ -1,7 +1,7 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
-import { MongoMemoryServer } from 'mongodb-memory-server';
+import { MongoMemoryReplSet } from 'mongodb-memory-server';
 
 import * as characterCmd from '../src/discord/commands/character.js';
 import * as treeCmd from '../src/discord/commands/tree.js';
@@ -58,7 +58,9 @@ function createMockInteraction(userId, options = {}, customId = null) {
 }
 
 before(async () => {
-  mongoServer = await MongoMemoryServer.create();
+  // Replica-set mode (not plain MongoMemoryServer) — trade.js/forge.js use
+  // Mongoose transactions, which standalone MongoDB doesn't support.
+  mongoServer = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
   const uri = mongoServer.getUri();
   await mongoose.connect(uri);
 });
@@ -286,6 +288,55 @@ test('Discord Commands Flow — /dungeon enter and combat buttons to victory', a
   assert.equal(reEnterReply.embeds.length, 1, 'A fresh lobby should open once the prior battle is resolved');
 });
 
+test('Discord Commands Flow — combat buttons reject acting for another player\'s character', async () => {
+  const userId = 'combat_owner';
+  const intruderId = 'combat_intruder';
+
+  await characterCmd.execute(createMockInteraction(userId, { subcommand: 'create', name: 'Owner', class: 'Warrior' }));
+  await characterCmd.execute(createMockInteraction(intruderId, { subcommand: 'create', name: 'Intruder', class: 'Ranger' }));
+
+  const enterInt = createMockInteraction(userId, { subcommand: 'enter', tier: 0 });
+  await dungeonCmd.execute(enterInt);
+  const lobby = await DungeonLobby.findOne({ leaderId: userId });
+
+  const startInt = createMockInteraction(userId, {}, `dungeon:start:${lobby.lobbyId}`);
+  await dungeonCmd.handleLobbyButton(startInt);
+
+  const battle = Array.from(dungeonCmd.activeDungeonBattles.values())
+    .find(b => b.partyState.some(m => m.character.discordId === userId));
+  assert.ok(battle);
+  const charId = battle.partyState[0].character._id.toString();
+
+  // Intruder tries to act on Owner's character via a crafted customId.
+  const hijackInt = createMockInteraction(intruderId, {}, `combat:attack:${charId}`);
+  await dungeonCmd.handleCombatButton(hijackInt);
+  assert.ok(hijackInt.getReply().content.includes('only act for your own character'));
+  assert.deepEqual(battle.pendingActions, {}, 'Hijack attempt must not register a pending action');
+
+  // Owner can still act normally afterward.
+  const legitInt = createMockInteraction(userId, {}, `combat:attack:${charId}`);
+  await dungeonCmd.handleCombatButton(legitInt);
+  assert.ok(!(legitInt.getReply().content || '').includes('only act for your own character'));
+});
+
+test('Discord Commands Flow — /dungeon enter and join are level-gated by map tier', async () => {
+  const userId = 'low_level_tier_test';
+  await characterCmd.execute(createMockInteraction(userId, { subcommand: 'create', name: 'Newbie', class: 'Warrior' }));
+
+  // Tier 3 (Blazing Caldera) requires Level 30 per mapEngine.js's MAP_TIERS.
+  const blockedInt = createMockInteraction(userId, { subcommand: 'enter', tier: 3 });
+  await dungeonCmd.execute(blockedInt);
+  assert.ok(blockedInt.getReply().content.includes('Level 30'));
+  assert.equal(await DungeonLobby.findOne({ leaderId: userId }), null, 'No lobby should open when the level gate blocks entry');
+
+  await mongoose.model('Character').updateOne({ discordId: userId }, { level: 30 });
+
+  const allowedInt = createMockInteraction(userId, { subcommand: 'enter', tier: 3 });
+  await dungeonCmd.execute(allowedInt);
+  assert.equal(allowedInt.getReply().embeds.length, 1);
+  assert.ok(await DungeonLobby.findOne({ leaderId: userId }));
+});
+
 test('Discord Commands Flow — a pending (not-yet-started) lobby is still freely replaceable', async () => {
   const userId = 'dungeon_replacer';
   await characterCmd.execute(createMockInteraction(userId, { subcommand: 'create', name: 'Replacer', class: 'Mage' }));
@@ -383,13 +434,15 @@ test('Discord Commands Flow — /dungeon party join, cap at 3, and leader-only s
   const battle = Array.from(dungeonCmd.activeDungeonBattles.values()).find(b => b.partyState.length === GAME_CONFIG.PARTY_SIZE_MAX);
   assert.ok(battle, 'Battle should launch with all 3 party members');
 
-  // Each living member can act; round resolves once every living member has submitted
+  // Each living member can act; round resolves once every living member has submitted.
+  // Each click must come from that member's own Discord ID — the bot rejects
+  // acting on behalf of another player's character.
   let maxRounds = 20;
   while (dungeonCmd.activeDungeonBattles.has(battle.battleId) && maxRounds > 0) {
     maxRounds--;
     for (const member of battle.partyState) {
       if (member.currentHp <= 0) continue;
-      const attackInt = createMockInteraction(leaderId, {}, `combat:attack:${member.character._id.toString()}`);
+      const attackInt = createMockInteraction(member.character.discordId, {}, `combat:attack:${member.character._id.toString()}`);
       await dungeonCmd.handleCombatButton(attackInt);
       if (!dungeonCmd.activeDungeonBattles.has(battle.battleId)) break;
     }
@@ -632,4 +685,30 @@ test('Discord Commands Flow — /redeem rejects invalid code', async () => {
   const invalidInt = createMockInteraction(userId, { code: 'NOPE' });
   await redeemCmd.execute(invalidInt);
   assert.ok(invalidInt.getReply().content.includes('not a valid code'));
+});
+
+test('Discord Commands Flow — /redeem enforces maxRedemptions atomically across concurrent users', async () => {
+  const userA = 'redeem_race_a';
+  const userB = 'redeem_race_b';
+  await characterCmd.execute(createMockInteraction(userA, { subcommand: 'create', name: 'RacerA', class: 'Warrior' }));
+  await characterCmd.execute(createMockInteraction(userB, { subcommand: 'create', name: 'RacerB', class: 'Mage' }));
+
+  await RedeemCode.create({ code: 'RACETEST', rewardGold: 100, maxRedemptions: 1 });
+
+  const intA = createMockInteraction(userA, { code: 'RACETEST' });
+  const intB = createMockInteraction(userB, { code: 'RACETEST' });
+
+  // Both redeem the same single-use code at once — without an atomic
+  // find+update, both could pass the "not yet redeemed / under the limit"
+  // check before either write lands.
+  await Promise.all([redeemCmd.execute(intA), redeemCmd.execute(intB)]);
+
+  const successCount = [intA, intB].filter(i => i.getReply().content.includes('redeemed!')).length;
+  const limitCount = [intA, intB].filter(i => i.getReply().content.includes('redemption limit')).length;
+
+  assert.equal(successCount, 1, 'Exactly one of the two concurrent redeemers should succeed');
+  assert.equal(limitCount, 1, 'The other should be rejected for hitting the redemption limit');
+
+  const finalCode = await mongoose.model('RedeemCode').findOne({ code: 'RACETEST' });
+  assert.equal(finalCode.redeemedByCharacterIds.length, 1);
 });

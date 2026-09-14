@@ -1,4 +1,5 @@
 import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
+import mongoose from 'mongoose';
 import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
 import { Item } from '../../models/Item.js';
@@ -207,16 +208,26 @@ export async function handleTradeButton(interaction) {
 
     fromCharacter.gold += offer.forGold - offer.giveGold;
     toCharacter.gold += offer.giveGold - offer.forGold;
-    await fromCharacter.save();
-    await toCharacter.save();
 
-    if (giveItem) {
-      giveItem.characterId = toCharacter._id;
-      await giveItem.save();
-    }
-    if (forItem) {
-      forItem.characterId = fromCharacter._id;
-      await forItem.save();
+    // Gold and item-ownership changes must land together — a crash between
+    // saves would otherwise move gold without transferring the item(s).
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        await fromCharacter.save({ session });
+        await toCharacter.save({ session });
+
+        if (giveItem) {
+          giveItem.characterId = toCharacter._id;
+          await giveItem.save({ session });
+        }
+        if (forItem) {
+          forItem.characterId = fromCharacter._id;
+          await forItem.save({ session });
+        }
+      });
+    } finally {
+      await session.endSession();
     }
 
     return interaction.update({

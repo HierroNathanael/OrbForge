@@ -59,7 +59,7 @@ export async function execute(interaction) {
 
     if (characterCount >= maxAllowedSlots) {
       return interaction.reply({ 
-        content: `❌ You have reached your maximum character slots (${characterCount}/${maxAllowedSlots}). Upgrade slots in \`/shop\`!`, 
+        content: `❌ You have reached your maximum character slots (${characterCount}/${maxAllowedSlots}).`,
         ephemeral: true 
       });
     }
