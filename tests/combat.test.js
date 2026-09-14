@@ -210,3 +210,43 @@ test('Combat Engine — Personal Instanced Loot Generation', () => {
   assert.ok(Array.isArray(loot.orbDrops));
   assert.ok(Array.isArray(loot.items));
 });
+
+test('Combat Engine — orb drops roll independently, not bundled off one shared roll', () => {
+  const character = { _id: 'char_orbs', name: 'Farmer', level: 10 };
+  // Under the old shared-roll cascade, rolling under the Cleansing threshold
+  // (0.10) deterministically implied rolling under Tempering's (0.40) too —
+  // 100% co-occurrence. With independent rolls, co-occurrence should track
+  // Tempering's own ~40% base rate instead.
+  let cleansingCount = 0;
+  let bothCount = 0;
+  const trials = 800;
+
+  for (let i = 0; i < trials; i++) {
+    const loot = generatePersonalInstancedLoot(character, 2);
+    if (loot.orbDrops.includes('orb_of_cleansing')) {
+      cleansingCount++;
+      if (loot.orbDrops.includes('orb_of_tempering')) bothCount++;
+    }
+  }
+
+  assert.ok(cleansingCount > 20, `Expected enough Cleansing drops to test (got ${cleansingCount}/${trials})`);
+  const coOccurRate = bothCount / cleansingCount;
+  assert.ok(coOccurRate < 0.9, `Tempering co-occurred with Cleansing ${(coOccurRate * 100).toFixed(0)}% of the time — rolls are still bundled, not independent`);
+});
+
+test('Combat Engine — gear/skill-book iLvl follows the map-tier lookup table, reaching 100 at tier 6', () => {
+  const character = { _id: 'char_ilvl', name: 'Grinder', level: 10 };
+  const boost = { exp: 1.0, drop: 50 };
+
+  let sawILvl100 = false;
+  for (let i = 0; i < 100 && !sawILvl100; i++) {
+    const loot = generatePersonalInstancedLoot(character, 6, boost);
+    if (loot.items.some(it => it.iLvl === 100)) sawILvl100 = true;
+  }
+  assert.ok(sawILvl100, 'Map tier 6 should be able to produce iLvl 100 items/books');
+
+  const lowTierLoot = generatePersonalInstancedLoot(character, 0, boost);
+  for (const item of lowTierLoot.items) {
+    assert.equal(item.iLvl, 1, 'Map tier 0 should produce iLvl 1');
+  }
+});

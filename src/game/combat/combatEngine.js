@@ -269,6 +269,14 @@ export function resolveCombatRound(partyState, enemyList, playerActions) {
   };
 }
 
+// Index = mapTier (0-6) -> iLvl, matching the design doc's exact iLvl bands
+// (not evenly spaced, so a lookup is more faithful than a linear formula).
+const MAP_TIER_TO_ILVL = [1, 15, 30, 50, 70, 85, 100];
+
+function getILvlForMapTier(mapTier) {
+  return MAP_TIER_TO_ILVL[Math.min(mapTier, MAP_TIER_TO_ILVL.length - 1)];
+}
+
 export function generatePersonalInstancedLoot(character, mapTier = 1, boostMultipliers = { exp: 1.0, drop: 1.0 }) {
   const expMult = boostMultipliers.exp || 1.0;
   const dropMult = boostMultipliers.drop || 1.0;
@@ -280,24 +288,24 @@ export function generatePersonalInstancedLoot(character, mapTier = 1, boostMulti
   const items = [];
   const orbDrops = [];
 
-  // Drop chance for new lore-named PoE currency Orbs
-  const orbRoll = Math.random();
-  if (orbRoll < 0.40 * dropMult) {
+  // Drop chance for new lore-named PoE currency Orbs — each type rolled
+  // independently so a lucky low roll doesn't bundle every orb type at once.
+  if (Math.random() < 0.40 * dropMult) {
     orbDrops.push(GAME_CONFIG.ORB_TYPES.TEMPERING);
   }
-  if (orbRoll < 0.25 * dropMult) {
+  if (Math.random() < 0.25 * dropMult) {
     orbDrops.push(GAME_CONFIG.ORB_TYPES.KINDLING);
   }
-  if (orbRoll < 0.10 * dropMult) {
+  if (Math.random() < 0.10 * dropMult) {
     orbDrops.push(GAME_CONFIG.ORB_TYPES.CLEANSING);
   }
-  if (orbRoll < 0.08 * dropMult) {
+  if (Math.random() < 0.08 * dropMult) {
     orbDrops.push(GAME_CONFIG.ORB_TYPES.ASCENDANCE);
   }
-  if (orbRoll < 0.03 * dropMult) {
+  if (Math.random() < 0.03 * dropMult) {
     orbDrops.push(GAME_CONFIG.ORB_TYPES.UNMAKING);
   }
-  if (orbRoll < 0.005 * dropMult) {
+  if (Math.random() < 0.005 * dropMult) {
     orbDrops.push(GAME_CONFIG.ORB_TYPES.ZENITH);
   }
 
@@ -305,7 +313,7 @@ export function generatePersonalInstancedLoot(character, mapTier = 1, boostMulti
   if (Math.random() < 0.50 * dropMult) {
     const types = ['weapon', 'helm', 'chest', 'boots', 'ring', 'amulet'];
     const type = types[Math.floor(Math.random() * types.length)];
-    const iLvl = Math.min(100, Math.max(1, mapTier * 10));
+    const iLvl = getILvlForMapTier(mapTier);
 
     items.push({
       baseItemId: `${type}_tier_${mapTier}`,
@@ -336,7 +344,7 @@ export function generatePersonalInstancedLoot(character, mapTier = 1, boostMulti
       type: 'skill_book',
       skillId,
       rarity: 'Normal',
-      iLvl: Math.min(100, Math.max(1, mapTier * 10)),
+      iLvl: getILvlForMapTier(mapTier),
       baseStats: {},
       prefixes: [],
       suffixes: []

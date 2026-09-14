@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyCraftingOrb } from '../src/game/crafting/craftingEngine.js';
+import { applyCraftingOrb, rollAffixTier } from '../src/game/crafting/craftingEngine.js';
 import { GAME_CONFIG } from '../src/config/constants.js';
 
 // ─── Helper: create a fresh base item ─────────────────────────────────────────
@@ -155,6 +155,38 @@ test('Orb of Zenith — fails on non-Rare item', () => {
   const item = makeItem({ rarity: 'Magic' });
   const res = applyCraftingOrb(item, GAME_CONFIG.ORB_TYPES.ZENITH);
   assert.equal(res.success, false);
+});
+
+// ─── Affix tier probability ────────────────────────────────────────────────
+test('rollAffixTier — never exceeds the eligible ceiling', () => {
+  for (let i = 0; i < 500; i++) {
+    assert.ok(rollAffixTier(1) === 1, 'Ceiling of 1 must always return 1');
+  }
+  for (let i = 0; i < 500; i++) {
+    const tier = rollAffixTier(3);
+    assert.ok(tier >= 1 && tier <= 3, `Tier ${tier} out of [1,3] range`);
+  }
+});
+
+test('rollAffixTier — steep falloff, tier 1 far more common than the max tier', () => {
+  const counts = { 1: 0, 6: 0 };
+  const trials = 2000;
+  for (let i = 0; i < trials; i++) {
+    const tier = rollAffixTier(6);
+    if (tier === 1) counts[1]++;
+    if (tier === 6) counts[6]++;
+  }
+  assert.ok(counts[1] > counts[6] * 10, `Expected tier 1 (${counts[1]}) >> tier 6 (${counts[6]}) over ${trials} trials`);
+});
+
+test('Orb of Ascendance — affix tier respects the iLvl ceiling (low iLvl never rolls a high tier)', () => {
+  for (let i = 0; i < 100; i++) {
+    const item = makeItem({ iLvl: 5 }); // floor(5/10)+1 = 1 -> every affix must be tier 1
+    applyCraftingOrb(item, GAME_CONFIG.ORB_TYPES.ASCENDANCE);
+    for (const aff of [...item.prefixes, ...item.suffixes]) {
+      assert.equal(aff.tier, 1, `iLvl 5 item rolled tier ${aff.tier}, expected 1`);
+    }
+  }
 });
 
 // ─── Sanity: Unknown Orb returns failure ─────────────────────────────────────

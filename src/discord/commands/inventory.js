@@ -3,6 +3,7 @@ import { User } from '../../models/User.js';
 import { Character } from '../../models/Character.js';
 import { Item } from '../../models/Item.js';
 import { createItemTooltip, buildInventoryEmbed, buildInventoryNavRow, INVENTORY_PAGE_SIZE } from '../embeds/uiBuilders.js';
+import { getGearTierFromILvl, getGearTierMinLevel, GAME_CONFIG } from '../../config/constants.js';
 
 export const data = new SlashCommandBuilder()
   .setName('inventory')
@@ -81,8 +82,21 @@ export async function execute(interaction) {
       return interaction.reply({ content: '❌ Item not found in your inventory.', ephemeral: true });
     }
 
+    if (!GAME_CONFIG.EQUIPMENT_SLOTS.includes(item.type)) {
+      return interaction.reply({ content: `❌ **${item.name}** cannot be equipped.`, ephemeral: true });
+    }
+
     if (item.isEquipped) {
       return interaction.reply({ content: `⚠️ **${item.name}** is already equipped!`, ephemeral: true });
+    }
+
+    const tier = getGearTierFromILvl(item.iLvl);
+    const minLevel = getGearTierMinLevel(tier);
+    if (character.level < minLevel) {
+      return interaction.reply({
+        content: `❌ **${item.name}** is **Tier ${tier}** gear — requires Level ${minLevel} (you are Level ${character.level}).`,
+        ephemeral: true
+      });
     }
 
     // Unequip any item currently in the same slot

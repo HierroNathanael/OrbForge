@@ -425,6 +425,10 @@ test('Discord Commands Flow — /inventory view, equip, and /forge with dropped 
     });
   }
 
+  // Equip now requires Level >= gear Tier * 10 — bump level so Tier 1 gear equips.
+  char.level = 10;
+  await char.save();
+
   const equipInt = createMockInteraction(userId, { subcommand: 'equip', item_id: item._id.toString() });
   await inventoryCmd.execute(equipInt);
   assert.ok(equipInt.getReply().content.includes('Equipped'));
@@ -442,6 +446,47 @@ test('Discord Commands Flow — /inventory view, equip, and /forge with dropped 
   await forgeCmd.execute(forgeInt);
   const forgeReply = forgeInt.getReply();
   assert.ok(forgeReply.embeds.length > 0 || forgeReply.content.includes('FORGE'));
+});
+
+test('Discord Commands Flow — /inventory equip is level-gated by gear Tier', async () => {
+  const userId = 'gear_gate_test';
+  await characterCmd.execute(createMockInteraction(userId, { subcommand: 'create', name: 'Underleveled', class: 'Warrior' }));
+
+  const CharacterModel = mongoose.model('Character');
+  const ItemModel = mongoose.model('Item');
+  const character = await CharacterModel.findOne({ discordId: userId });
+  assert.equal(character.level, 1);
+
+  // iLvl 30 -> Tier 3 -> requires Level 30. Character is still Level 1.
+  const tier3Item = await ItemModel.create({
+    characterId: character._id,
+    baseItemId: 'test_helm',
+    name: 'Test Helm',
+    type: 'helm',
+    rarity: 'Normal',
+    iLvl: 30,
+    baseStats: { armor: 20 }
+  });
+
+  const blockedInt = createMockInteraction(userId, { subcommand: 'equip', item_id: tier3Item._id.toString() });
+  await inventoryCmd.execute(blockedInt);
+  const blockedReply = blockedInt.getReply();
+  assert.ok(blockedReply.content.includes('Tier 3'));
+  assert.ok(blockedReply.content.includes('Level 30'));
+
+  const stillUnequipped = await ItemModel.findById(tier3Item._id);
+  assert.equal(stillUnequipped.isEquipped, false);
+
+  // Level up to 30 and retry — should succeed.
+  character.level = 30;
+  await character.save();
+
+  const allowedInt = createMockInteraction(userId, { subcommand: 'equip', item_id: tier3Item._id.toString() });
+  await inventoryCmd.execute(allowedInt);
+  assert.ok(allowedInt.getReply().content.includes('Equipped'));
+
+  const nowEquipped = await ItemModel.findById(tier3Item._id);
+  assert.equal(nowEquipped.isEquipped, true);
 });
 
 test('Discord Commands Flow — /trade offer, accept swaps item + gold both ways', async () => {

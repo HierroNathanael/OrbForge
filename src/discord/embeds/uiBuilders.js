@@ -4,7 +4,7 @@ import { SKILL_TREE_DATA } from '../../game/skillTree/treeData.js';
 import { getEligibleNodes, accumulateTreeStats, getPhaseGateStatus } from '../../game/skillTree/treeEngine.js';
 import { getAscendTree, getEligibleAscendNodes, accumulateAscendStats } from '../../game/skillTree/ascendEngine.js';
 import { calculateEffectiveStats } from '../../game/combat/combatEngine.js';
-import { GAME_CONFIG, xpToNextLevel } from '../../config/constants.js';
+import { GAME_CONFIG, xpToNextLevel, getGearTierFromILvl, getGearTierMinLevel } from '../../config/constants.js';
 
 function renderXpBar(current, max, segments = 10) {
   const ratio = max > 0 ? Math.min(1, current / max) : 1;
@@ -259,11 +259,14 @@ export function createItemTooltip(item) {
     Legendary: '#e67e22'
   };
 
+  const gearTier = getGearTierFromILvl(item.iLvl);
+  const gearMinLevel = getGearTierMinLevel(gearTier);
+
   return new EmbedBuilder()
-    .setTitle(`🗡️ ${item.name} [iLvl ${item.iLvl}]`)
+    .setTitle(`🗡️ ${item.name} [Tier ${gearTier}]`)
     .setColor(rarityColors[item.rarity] || '#ffffff')
     .addFields(
-      { name: 'Rarity & Type', value: `**Rarity**: ${item.rarity}\n**Slot**: ${(item.type || 'item').toUpperCase()}${item.isEquipped ? ' 🛡️ **[EQUIPPED]**' : ''}`, inline: true },
+      { name: 'Rarity & Type', value: `**Rarity**: ${item.rarity}\n**Slot**: ${(item.type || 'item').toUpperCase()}${item.isEquipped ? ' 🛡️ **[EQUIPPED]**' : ''}\n**Requires**: Level ${gearMinLevel}`, inline: true },
       { name: 'Base Attributes', value: baseStatsText, inline: true },
       { name: 'Prefixes', value: prefixes, inline: false },
       { name: 'Suffixes', value: suffixes, inline: false },
@@ -476,12 +479,14 @@ export function buildInventoryEmbed(character, items, page) {
   const totalPages = Math.max(1, Math.ceil(unequipped.length / INVENTORY_PAGE_SIZE));
   const pageItems = unequipped.slice(page * INVENTORY_PAGE_SIZE, (page + 1) * INVENTORY_PAGE_SIZE);
 
+  const tierTag = (i) => GAME_CONFIG.EQUIPMENT_SLOTS.includes(i.type) ? ` [T${getGearTierFromILvl(i.iLvl)}]` : '';
+
   const equippedText = equipped.length > 0
-    ? equipped.map(i => `🛡️ **[${i.type.toUpperCase()}]** ${i.name} [${i.rarity}] — \`ID: ${i._id}\``).join('\n')
+    ? equipped.map(i => `🛡️ **[${i.type.toUpperCase()}]** ${i.name} [${i.rarity}]${tierTag(i)} — \`ID: ${i._id}\``).join('\n')
     : '*No gear currently equipped.*';
 
   const unequippedText = pageItems.length > 0
-    ? pageItems.map(i => `📦 **[${i.type.toUpperCase()}]** ${i.name} [${i.rarity}] — \`ID: ${i._id}\``).join('\n')
+    ? pageItems.map(i => `📦 **[${i.type.toUpperCase()}]** ${i.name} [${i.rarity}]${tierTag(i)} — \`ID: ${i._id}\``).join('\n')
     : '*No unequipped items.*';
 
   return new EmbedBuilder()

@@ -60,6 +60,21 @@ export function xpToNextLevel(level) {
   return level * GAME_CONFIG.XP_PER_LEVEL_FACTOR;
 }
 
+// Gear tier (T1-T6) derived from an item's iLvl, matching the design doc's
+// iLvl bands exactly. Equipping a tier requires character.level >= tier * 10.
+export function getGearTierFromILvl(iLvl) {
+  if (iLvl < 15) return 1;
+  if (iLvl < 30) return 2;
+  if (iLvl < 50) return 3;
+  if (iLvl < 70) return 4;
+  if (iLvl < 85) return 5;
+  return 6;
+}
+
+export function getGearTierMinLevel(tier) {
+  return tier * 10;
+}
+
 // Mutates character.level/xp/skillPoints.available to clear any backlog of
 // earned-but-unresolved level-ups. Idempotent — safe to call on every read.
 export function resolveLevelUps(character) {

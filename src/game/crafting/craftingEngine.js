@@ -2,20 +2,32 @@ import { GAME_CONFIG } from '../../config/constants.js';
 
 export const AFFIX_POOLS = {
   prefixes: [
-    { name: 'Heavy', stat: 'flat_damage', baseValue: 8, perILvl: 2, maxTier: 5 },
-    { name: 'Stout', stat: 'health', baseValue: 20, perILvl: 5, maxTier: 5 },
-    { name: 'Armored', stat: 'armor', baseValue: 15, perILvl: 4, maxTier: 5 },
-    { name: 'Elusive', stat: 'evasion', baseValue: 15, perILvl: 4, maxTier: 5 },
-    { name: 'Radiant', stat: 'damage_percent', baseValue: 0.05, perILvl: 0.01, maxTier: 5 }
+    { name: 'Heavy', stat: 'flat_damage', baseValue: 8, perILvl: 2, maxTier: 6 },
+    { name: 'Stout', stat: 'health', baseValue: 20, perILvl: 5, maxTier: 6 },
+    { name: 'Armored', stat: 'armor', baseValue: 15, perILvl: 4, maxTier: 6 },
+    { name: 'Elusive', stat: 'evasion', baseValue: 15, perILvl: 4, maxTier: 6 },
+    { name: 'Radiant', stat: 'damage_percent', baseValue: 0.05, perILvl: 0.01, maxTier: 6 }
   ],
   suffixes: [
-    { name: 'of Swiftness', stat: 'critical_strike', baseValue: 0.03, perILvl: 0.005, maxTier: 5 },
-    { name: 'of Might', stat: 'strength', baseValue: 4, perILvl: 1, maxTier: 5 },
-    { name: 'of Grace', stat: 'dexterity', baseValue: 4, perILvl: 1, maxTier: 5 },
-    { name: 'of Brilliance', stat: 'intelligence', baseValue: 4, perILvl: 1, maxTier: 5 },
-    { name: 'of Vampirism', stat: 'lifesteal', baseValue: 0.02, perILvl: 0.005, maxTier: 5 }
+    { name: 'of Swiftness', stat: 'critical_strike', baseValue: 0.03, perILvl: 0.005, maxTier: 6 },
+    { name: 'of Might', stat: 'strength', baseValue: 4, perILvl: 1, maxTier: 6 },
+    { name: 'of Grace', stat: 'dexterity', baseValue: 4, perILvl: 1, maxTier: 6 },
+    { name: 'of Brilliance', stat: 'intelligence', baseValue: 4, perILvl: 1, maxTier: 6 },
+    { name: 'of Vampirism', stat: 'lifesteal', baseValue: 0.02, perILvl: 0.005, maxTier: 6 }
   ]
 };
+
+// Steep falloff: each tier above 1 requires beating this roll again, so the
+// top tier stays rare relative to low tiers (P(1)=65%, P(2)=22.75%, P(3)=7.96%, ...).
+const TIER_UPGRADE_CHANCE = 0.35;
+
+export function rollAffixTier(maxEligibleTier) {
+  let tier = 1;
+  while (tier < maxEligibleTier && Math.random() < TIER_UPGRADE_CHANCE) {
+    tier++;
+  }
+  return tier;
+}
 
 function generateRandomAffix(type, iLvl, existingAffixes = []) {
   const pool = AFFIX_POOLS[type];
@@ -23,7 +35,8 @@ function generateRandomAffix(type, iLvl, existingAffixes = []) {
   if (available.length === 0) return null;
 
   const template = available[Math.floor(Math.random() * available.length)];
-  const tier = Math.min(template.maxTier, Math.max(1, Math.floor(iLvl / 10) + 1));
+  const maxEligibleTier = Math.min(template.maxTier, Math.max(1, Math.floor(iLvl / 10) + 1));
+  const tier = rollAffixTier(maxEligibleTier);
   const rawValue = template.baseValue + (template.perILvl * (iLvl + tier));
   const value = typeof template.baseValue === 'number' && Number.isInteger(template.baseValue)
     ? Math.round(rawValue)
